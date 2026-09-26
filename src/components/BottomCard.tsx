@@ -104,7 +104,7 @@ export const BottomCard: React.FC<BottomCardProps> = ({
             className="relative md:absolute md:-right-12 lg:-right-16 xl:-right-20 md:-top-16 lg:-top-22 w-[350px] sm:w-[480px] md:w-[600px] lg:w-[680px] xl:w-[730px] max-w-none select-none filter drop-shadow-[0_25px_40px_rgba(0,0,0,0.7)] will-change-transform"
           >
             <Image
-              src="/assets/spoon.png"
+              src="/assets/spoon.webp"
               alt="Wooden spoon holding roasted coffee beans with beans floating in air"
               width={1774}
               height={887}

@@ -99,7 +99,7 @@ export const SplashHero: React.FC<SplashHeroProps> = ({
               className="relative w-full flex items-center justify-center lg:justify-end filter drop-shadow-[0_30px_60px_rgba(0,0,0,0.85)]"
             >
               <Image
-                src="/assets/main 1.png"
+                src="/assets/main 1.webp"
                 alt="BREW 3D Artisanal Coffee Cups with Dynamic Splash"
                 width={1254}
                 height={1254}

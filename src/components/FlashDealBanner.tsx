@@ -23,7 +23,7 @@ export const FlashDealBanner: React.FC = () => {
       id: flashDeal.id || "deal-pair-bundle",
       name: `${flashDeal.beverageName} + ${flashDeal.pastryName} [Flash Bundle]`,
       price: flashDeal.dealPrice,
-      image: "/assets/cup1.png",
+      image: "/assets/cup1.webp",
       category: "Flash Special",
     });
     setAdded(true);

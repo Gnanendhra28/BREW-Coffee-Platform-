@@ -37,7 +37,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Dark Cocoa", "Creamy Vanilla", "Caramel"],
     volumeOrCalories: "6 oz • 210 kcal",
     badge: "Signature",
-    image: "/assets/coffee/affagato.png",
+    image: "/assets/coffee/affagato.webp",
   },
   {
     id: "c-2",
@@ -50,7 +50,7 @@ export const MENU_ITEMS: MenuItem[] = [
     description: "Espresso pulled over hot filtered mineral water for a crisp, clean cup highlighting pure origin notes.",
     notes: ["Roasted Hazelnut", "Dark Chocolate", "Subtle Zest"],
     volumeOrCalories: "12 oz • 10 kcal",
-    image: "/assets/coffee/americino.png",
+    image: "/assets/coffee/americino.webp",
   },
   {
     id: "c-3",
@@ -64,7 +64,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Toffee", "Almond", "Velvety Foam"],
     volumeOrCalories: "8 oz • 140 kcal",
     badge: "Popular",
-    image: "/assets/coffee/cappuccino.png",
+    image: "/assets/coffee/cappuccino.webp",
   },
   {
     id: "c-4",
@@ -78,7 +78,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Dark Cocoa", "Black Cherry", "Brown Sugar"],
     volumeOrCalories: "16 oz • 15 kcal",
     badge: "Signature",
-    image: "/assets/coffee/cold brew.png",
+    image: "/assets/coffee/cold brew.webp",
   },
   {
     id: "c-5",
@@ -92,7 +92,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Molasses", "70% Cocoa", "Cedar"],
     volumeOrCalories: "2 oz • 5 kcal",
     badge: "Artisanal",
-    image: "/assets/coffee/expresso.png",
+    image: "/assets/coffee/expresso.webp",
   },
   {
     id: "c-6",
@@ -105,7 +105,7 @@ export const MENU_ITEMS: MenuItem[] = [
     description: "Double ristretto blended seamlessly with micro-textured velvety milk for an intense coffee punch.",
     notes: ["Roasted Walnut", "Honey", "Silky Milk"],
     volumeOrCalories: "8 oz • 150 kcal",
-    image: "/assets/coffee/flat white.png",
+    image: "/assets/coffee/flat white.webp",
   },
   {
     id: "c-7",
@@ -118,7 +118,7 @@ export const MENU_ITEMS: MenuItem[] = [
     description: "Rich espresso poured over mountain clear ice and cold water for vibrant, thirst-quenching clarity.",
     notes: ["Crisp Cocoa", "Light Citrus", "Clean Finish"],
     volumeOrCalories: "16 oz • 10 kcal",
-    image: "/assets/coffee/iced americino.png",
+    image: "/assets/coffee/iced americino.webp",
   },
   {
     id: "c-8",
@@ -132,7 +132,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Sweet Cream", "Golden Syrup", "Smooth Espresso"],
     volumeOrCalories: "16 oz • 170 kcal",
     badge: "Popular",
-    image: "/assets/coffee/iced latte.png",
+    image: "/assets/coffee/iced latte.webp",
   },
   {
     id: "c-9",
@@ -146,7 +146,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Dark Chocolate", "Espresso Cream", "Vanilla"],
     volumeOrCalories: "16 oz • 290 kcal",
     badge: "Chef's Pick",
-    image: "/assets/coffee/iced mocha.png",
+    image: "/assets/coffee/iced mocha.webp",
   },
 
   // ==================== TEA ====================
@@ -162,7 +162,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Bergamot Citrus", "Floral Lavender", "Malted Black Tea"],
     volumeOrCalories: "12 oz • 0 kcal",
     badge: "Popular",
-    image: "/assets/TEA/Earl Grey.png",
+    image: "/assets/TEA/Earl Grey.webp",
   },
   {
     id: "t-2",
@@ -175,7 +175,7 @@ export const MENU_ITEMS: MenuItem[] = [
     description: "Simmered fresh organic ginger root infused with wild forest honey and cracked black peppercorn.",
     notes: ["Spicy Ginger", "Forest Honey", "Warming Zing"],
     volumeOrCalories: "12 oz • 45 kcal",
-    image: "/assets/TEA/Ginger Tea.png",
+    image: "/assets/TEA/Ginger Tea.webp",
   },
   {
     id: "t-3",
@@ -188,7 +188,7 @@ export const MENU_ITEMS: MenuItem[] = [
     description: "Steeped golden Assam tea leaves brightened with hand-squeezed sun-ripened Sicilian lemon juice.",
     notes: ["Zesty Lemon", "Bright Sunshine", "Golden Honey"],
     volumeOrCalories: "12 oz • 35 kcal",
-    image: "/assets/TEA/Lemon Tea.png",
+    image: "/assets/TEA/Lemon Tea.webp",
   },
   {
     id: "t-4",
@@ -201,7 +201,7 @@ export const MENU_ITEMS: MenuItem[] = [
     description: "Full-bodied single-estate Darjeeling black tea with deep amber liquor and muscatel grape undertones.",
     notes: ["Muscatel", "Oak Wood", "Malt"],
     volumeOrCalories: "12 oz • 0 kcal",
-    image: "/assets/TEA/black tee.png",
+    image: "/assets/TEA/black tee.webp",
   },
   {
     id: "t-5",
@@ -215,7 +215,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Warm Cinnamon", "Sweet Cardamom", "Clove"],
     volumeOrCalories: "12 oz • 40 kcal",
     badge: "Signature",
-    image: "/assets/TEA/chinamon.png",
+    image: "/assets/TEA/chinamon.webp",
   },
   {
     id: "t-6",
@@ -229,7 +229,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Fresh Grass", "Sweet Umami", "Toasted Rice"],
     volumeOrCalories: "12 oz • 0 kcal",
     badge: "Organic",
-    image: "/assets/TEA/green tea.png",
+    image: "/assets/TEA/green tea.webp",
   },
   {
     id: "t-7",
@@ -243,7 +243,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Ripe Peach", "Passionfruit", "Mint Sprig"],
     volumeOrCalories: "16 oz • 50 kcal",
     badge: "Popular",
-    image: "/assets/TEA/iced tea.png",
+    image: "/assets/TEA/iced tea.webp",
   },
   {
     id: "t-8",
@@ -256,7 +256,7 @@ export const MENU_ITEMS: MenuItem[] = [
     description: "Bruised whole spearmint and peppermint leaves brewed in steaming water for a calming digestive tonic.",
     notes: ["Crisp Menthol", "Cooling Breeze", "Sweet Herbal"],
     volumeOrCalories: "12 oz • 0 kcal",
-    image: "/assets/TEA/mint tea.png",
+    image: "/assets/TEA/mint tea.webp",
   },
   {
     id: "t-9",
@@ -270,7 +270,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Kashmiri Saffron", "Rich Cardamom", "Velvety Milk"],
     volumeOrCalories: "10 oz • 120 kcal",
     badge: "Signature",
-    image: "/assets/TEA/tea.png",
+    image: "/assets/TEA/tea.webp",
   },
 
   // ==================== MILKSHAKES ====================
@@ -285,7 +285,7 @@ export const MENU_ITEMS: MenuItem[] = [
     description: "Caramelized ripe bananas churned with rich French vanilla ice cream and topped with banana chips.",
     notes: ["Ripe Banana", "Vanilla Custard", "Whipped Cream"],
     volumeOrCalories: "16 oz • 460 kcal",
-    image: "/assets/shakes/Banana Milkshake.png",
+    image: "/assets/shakes/Banana Milkshake.webp",
   },
   {
     id: "s-2",
@@ -299,7 +299,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Fudge Brownie", "Belgian Chocolate", "Cocoa Crunch"],
     volumeOrCalories: "16 oz • 590 kcal",
     badge: "Signature",
-    image: "/assets/shakes/Brownie Milkshake.png",
+    image: "/assets/shakes/Brownie Milkshake.webp",
   },
   {
     id: "s-3",
@@ -313,7 +313,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Dutch Cocoa", "Milk Chocolate", "Creamy Ganache"],
     volumeOrCalories: "16 oz • 510 kcal",
     badge: "Popular",
-    image: "/assets/shakes/Chocolate Milkshake.png",
+    image: "/assets/shakes/Chocolate Milkshake.webp",
   },
   {
     id: "s-4",
@@ -327,7 +327,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Alphonso Mango", "Tropical Sweetness", "Thick Cream"],
     volumeOrCalories: "16 oz • 440 kcal",
     badge: "Chef's Pick",
-    image: "/assets/shakes/Mango Milkshake.png",
+    image: "/assets/shakes/Mango Milkshake.webp",
   },
   {
     id: "s-5",
@@ -341,7 +341,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Cookies & Cream", "Vanilla Wafer", "Chocolate Crumb"],
     volumeOrCalories: "16 oz • 560 kcal",
     badge: "Popular",
-    image: "/assets/shakes/Oreo Milkshake.png",
+    image: "/assets/shakes/Oreo Milkshake.webp",
   },
   {
     id: "s-6",
@@ -354,7 +354,7 @@ export const MENU_ITEMS: MenuItem[] = [
     description: "Creamy roasted peanut butter blended with vanilla bean ice cream and sea salt caramel ribbon.",
     notes: ["Roasted Peanuts", "Sea Salt Caramel", "Buttery Sweet"],
     volumeOrCalories: "16 oz • 580 kcal",
-    image: "/assets/shakes/Peanut Butter Milkshake.png",
+    image: "/assets/shakes/Peanut Butter Milkshake.webp",
   },
   {
     id: "s-7",
@@ -367,7 +367,7 @@ export const MENU_ITEMS: MenuItem[] = [
     description: "Fresh macerated strawberries spun with strawberry gelato and topped with freeze-dried berry dust.",
     notes: ["Fresh Strawberry", "Sweet Cream", "Tart Berry"],
     volumeOrCalories: "16 oz • 420 kcal",
-    image: "/assets/shakes/Strawberry Milkshake.png",
+    image: "/assets/shakes/Strawberry Milkshake.webp",
   },
 
   // ==================== DESSERTS ====================
@@ -382,7 +382,7 @@ export const MENU_ITEMS: MenuItem[] = [
     description: "Moist, oven-warmed artisanal banana loaf baked with toasted walnuts and coated with cinnamon brown butter.",
     notes: ["Caramelized Banana", "Toasted Walnuts", "Warm Spice"],
     volumeOrCalories: "1 slice • 320 kcal",
-    image: "/assets/desserts/Banana Bread Slice.png",
+    image: "/assets/desserts/Banana Bread Slice.webp",
   },
   {
     id: "d-2",
@@ -396,7 +396,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Gooey Fudge", "Dark Chocolate", "Flaky Sea Salt"],
     volumeOrCalories: "1 piece • 260 kcal",
     badge: "Popular",
-    image: "/assets/desserts/Brownie Bite.png",
+    image: "/assets/desserts/Brownie Bite.webp",
   },
   {
     id: "d-3",
@@ -410,7 +410,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Moloten Cocoa", "Warm Ganache", "Powdered Sugar"],
     volumeOrCalories: "1 cake • 430 kcal",
     badge: "Signature",
-    image: "/assets/desserts/Choco Lava.png",
+    image: "/assets/desserts/Choco Lava.webp",
   },
   {
     id: "d-4",
@@ -424,7 +424,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Korintje Cinnamon", "Brown Sugar", "Cream Cheese Icing"],
     volumeOrCalories: "1 roll • 410 kcal",
     badge: "Popular",
-    image: "/assets/desserts/Cinnamon Roll.png",
+    image: "/assets/desserts/Cinnamon Roll.webp",
   },
   {
     id: "d-5",
@@ -437,7 +437,7 @@ export const MENU_ITEMS: MenuItem[] = [
     description: "Crispy browned-butter edges with a soft, gooey center packed with molten Belgian chocolate pools.",
     notes: ["Brown Butter", "Belgian Chocolate", "Vanilla Pod"],
     volumeOrCalories: "1 cookie • 280 kcal",
-    image: "/assets/desserts/Cookie.png",
+    image: "/assets/desserts/Cookie.webp",
   },
   {
     id: "d-6",
@@ -450,7 +450,7 @@ export const MENU_ITEMS: MenuItem[] = [
     description: "Handcrafted airy brioche yeast donut dipped in vanilla bean honey glaze with a melt-in-your-mouth crumb.",
     notes: ["Honey Glaze", "Airy Brioche", "Vanilla Bean"],
     volumeOrCalories: "1 donut • 310 kcal",
-    image: "/assets/desserts/Donut.png",
+    image: "/assets/desserts/Donut.webp",
   },
   {
     id: "d-7",
@@ -464,7 +464,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Subtle Cocoa", "Tangy Mascarpone", "Silky Sponge"],
     volumeOrCalories: "1 slice • 390 kcal",
     badge: "Chef's Pick",
-    image: "/assets/desserts/Red Velvet.png",
+    image: "/assets/desserts/Red Velvet.webp",
   },
   {
     id: "d-8",
@@ -478,7 +478,7 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Brew Espresso", "Whipped Mascarpone", "Dusted Cocoa"],
     volumeOrCalories: "1 cup • 360 kcal",
     badge: "Signature",
-    image: "/assets/desserts/Tiramisu.png",
+    image: "/assets/desserts/Tiramisu.webp",
   },
   {
     id: "d-9",
@@ -492,6 +492,6 @@ export const MENU_ITEMS: MenuItem[] = [
     notes: ["Caramelized Flakes", "Bittersweet Mousse", "Mirror Glaze"],
     volumeOrCalories: "1 pastry • 340 kcal",
     badge: "Artisanal",
-    image: "/assets/desserts/chocolate pastry.png",
+    image: "/assets/desserts/chocolate pastry.webp",
   },
 ];

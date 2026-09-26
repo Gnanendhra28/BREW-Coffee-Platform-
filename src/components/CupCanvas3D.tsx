@@ -33,7 +33,7 @@ export const CupCanvas3D: React.FC<CupCanvas3DProps> = ({
 
     // Load HD clean brew logo
     const logoImg = new window.Image();
-    logoImg.src = "/assets/brew_logo_hd.png";
+    logoImg.src = "/assets/brew_logo_hd.webp";
 
     // Sleeve dimensions on main_2_clean.png:
     // Center X: 532
@@ -139,7 +139,7 @@ export const CupCanvas3D: React.FC<CupCanvas3DProps> = ({
     >
       {/* 1. User's exact cup image with clean kraft sleeve */}
       <Image
-        src="/assets/main_2_clean.png"
+        src="/assets/main_2_clean.webp"
         alt="Brew Premium Coffee Cup"
         fill
         priority

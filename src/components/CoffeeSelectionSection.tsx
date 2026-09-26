@@ -24,7 +24,7 @@ const PRODUCTS: Product[] = [
     description:
       "A timeless classic: 20% espresso, 40% velvety steamed milk, and 40% airy milk foam. Balanced and smooth.",
     price: 4.5,
-    image: "/assets/cup1.png",
+    image: "/assets/cup1.webp",
   },
   {
     id: "latte",
@@ -33,7 +33,7 @@ const PRODUCTS: Product[] = [
     description:
       "Smooth and creamy: 30% espresso and 70% fresh, hot milk. Perfect for a creamy coffee treat.",
     price: 5.0,
-    image: "/assets/cup3.png",
+    image: "/assets/cup3.webp",
   },
   {
     id: "mocha",
@@ -42,7 +42,7 @@ const PRODUCTS: Product[] = [
     description:
       "For the chocolate lover: 20% espresso, 50% hot milk, and 30% premium chocolate. Decadently sweet.",
     price: 5.0,
-    image: "/assets/cup2.png",
+    image: "/assets/cup2.webp",
   },
 ];
 

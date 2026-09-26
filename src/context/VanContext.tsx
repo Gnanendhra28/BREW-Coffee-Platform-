@@ -138,8 +138,8 @@ const INITIAL_DEMO_ORDERS: VanOrder[] = [
     orderNumber: "101",
     customerName: "Arjun Reddy",
     items: [
-      { id: "c-3", name: "Single-Origin Cappuccino", price: 220, image: "/assets/cup1.png", category: "Coffee", quantity: 1 },
-      { id: "d-4", name: "Cinnamon Roll", price: 180, image: "/assets/desserts /Cinnamon Roll.png", category: "Desserts", quantity: 1 },
+      { id: "c-3", name: "Single-Origin Cappuccino", price: 220, image: "/assets/cup1.webp", category: "Coffee", quantity: 1 },
+      { id: "d-4", name: "Cinnamon Roll", price: 180, image: "/assets/desserts /Cinnamon Roll.webp", category: "Desserts", quantity: 1 },
     ],
     notes: "Oat milk for cappuccino please!",
     totalAmount: 400,
@@ -153,7 +153,7 @@ const INITIAL_DEMO_ORDERS: VanOrder[] = [
     orderNumber: "102",
     customerName: "Sravani Rao",
     items: [
-      { id: "c-1", name: "Affogato", price: 240, image: "/assets/coffee/affagato.png", category: "Coffee", quantity: 2 },
+      { id: "c-1", name: "Affogato", price: 240, image: "/assets/coffee/affagato.webp", category: "Coffee", quantity: 2 },
     ],
     notes: "Extra vanilla bean gelato",
     totalAmount: 480,
@@ -167,8 +167,8 @@ const INITIAL_DEMO_ORDERS: VanOrder[] = [
     orderNumber: "103",
     customerName: "Karthik Varma",
     items: [
-      { id: "c-2", name: "Americano", price: 180, image: "/assets/coffee/americino.png", category: "Coffee", quantity: 1 },
-      { id: "t-2", name: "Earl Grey", price: 160, image: "/assets/TEA/Earl Grey.png", category: "Tea", quantity: 1 },
+      { id: "c-2", name: "Americano", price: 180, image: "/assets/coffee/americino.webp", category: "Coffee", quantity: 1 },
+      { id: "t-2", name: "Earl Grey", price: 160, image: "/assets/TEA/Earl Grey.webp", category: "Tea", quantity: 1 },
     ],
     totalAmount: 340,
     status: "brewing",

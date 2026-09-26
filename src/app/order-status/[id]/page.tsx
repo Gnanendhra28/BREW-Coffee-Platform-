@@ -51,8 +51,8 @@ export default function CustomerOrderStatusPage({
     orderNumber: "102",
     customerName: "Sanctuary Guest",
     items: [
-      { id: "c-3", name: "Cappuccino", price: 220, image: "/assets/cup1.png", category: "Coffee", quantity: 1 },
-      { id: "d-4", name: "Cinnamon Roll", price: 180, image: "/assets/desserts /Cinnamon Roll.png", category: "Desserts", quantity: 1 },
+      { id: "c-3", name: "Cappuccino", price: 220, image: "/assets/cup1.webp", category: "Coffee", quantity: 1 },
+      { id: "d-4", name: "Cinnamon Roll", price: 180, image: "/assets/desserts /Cinnamon Roll.webp", category: "Desserts", quantity: 1 },
     ],
     notes: "Oat milk please!",
     totalAmount: 400,
