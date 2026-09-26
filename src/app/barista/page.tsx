@@ -483,6 +483,15 @@ export default function BaristaKDSPage() {
 
                             <div className="flex flex-col items-end gap-1.5">
                               {getStatusBadge(order.status)}
+                              {order.paymentStatus === "paid" ? (
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] uppercase font-bold tracking-wider">
+                                  ✓ Paid (UPI)
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[9px] uppercase font-bold tracking-wider">
+                                  💵 Pay Counter
+                                </span>
+                              )}
                               <span className="text-[11px] text-[#8C7C70] font-mono flex items-center gap-1">
                                 <Clock className="w-3 h-3" />
                                 {elapsedMins === 0

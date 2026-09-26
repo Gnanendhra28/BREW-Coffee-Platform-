@@ -35,6 +35,9 @@ export interface VanOrder {
   vehicleInfo?: string; // for curbside (e.g. "Silver Honda Civic")
   vanLocationName?: string; // Van spot name where order was placed
   curbsideArrivalStatus?: "approaching" | "arrived";
+  paymentStatus?: "pending" | "paid" | "failed";
+  paymentId?: string;
+  paymentMethod?: string;
 }
 
 export interface VanLocation {
@@ -90,6 +93,9 @@ interface VanContextType {
     pickupType?: "walkup" | "curbside";
     vehicleInfo?: string;
     vanLocationName?: string;
+    paymentStatus?: "pending" | "paid" | "failed";
+    paymentId?: string;
+    paymentMethod?: string;
   }) => string;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
   toggleSoldOut: (itemId: string) => void;
@@ -430,6 +436,9 @@ export const VanProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pickupType?: "walkup" | "curbside";
     vehicleInfo?: string;
     vanLocationName?: string;
+    paymentStatus?: "pending" | "paid" | "failed";
+    paymentId?: string;
+    paymentMethod?: string;
   }): string => {
     // Generate sequential token number 101-999
     const lastNum = orders.length > 0 ? parseInt(orders[orders.length - 1].orderNumber, 10) : 100;
@@ -451,6 +460,9 @@ export const VanProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       vehicleInfo: orderData.vehicleInfo,
       vanLocationName:
         orderData.vanLocationName || vanLocation.spotName || "HITEC City — Cyber Towers (Hyderabad)",
+      paymentStatus: orderData.paymentStatus || "pending",
+      paymentId: orderData.paymentId,
+      paymentMethod: orderData.paymentMethod || "UPI / Cards",
     };
 
     setOrders((prev) => [...prev, newOrder]);
