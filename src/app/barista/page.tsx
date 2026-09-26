@@ -565,6 +565,16 @@ export default function BaristaKDSPage() {
                               onClick={() => {
                                 updateOrderStatus(order.id, "ready");
                                 playNewOrderDing();
+                                // Trigger Web Push and hardware buzzer to customer smartphone
+                                fetch("/api/notifications/trigger", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    orderId: order.id,
+                                    orderNumber: order.orderNumber,
+                                    vanLocationName: vanLocation.spotName,
+                                  }),
+                                }).catch(() => {});
                               }}
                               className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
                             >

@@ -10,10 +10,17 @@ import {
   Car,
   Navigation,
   Sparkles,
+  BellRing,
+  Volume2,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useVan, VanOrder } from "@/context/VanContext";
 import { Header } from "@/components/Header";
+import {
+  registerBuzzerServiceWorker,
+  requestBuzzerPermission,
+  triggerHardwareBuzzer,
+} from "@/lib/pushBuzzer";
 
 const FALLBACK_CREATED_AT = 1710000000000;
 
@@ -27,6 +34,13 @@ export default function CustomerOrderStatusPage({
   const { orders, vanLocation, curbsideArrivals, updateCurbsideArrival } = useVan();
 
   const [hasAlertedReady, setHasAlertedReady] = useState(false);
+  const [permissionState, setPermissionState] = useState<NotificationPermission | "unsupported">(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      return Notification.permission;
+    }
+    return "default";
+  });
+  const [isTestingBuzzer, setIsTestingBuzzer] = useState(false);
 
   // Find order in context
   const order = orders.find((o) => o.id === orderId || o.orderNumber === orderId);
@@ -47,6 +61,21 @@ export default function CustomerOrderStatusPage({
     pickupType: "walkup",
   };
 
+  // Register service worker on mount & check notification permissions
+  useEffect(() => {
+    registerBuzzerServiceWorker();
+    if (typeof window !== "undefined" && "Notification" in window) {
+      const current = Notification.permission;
+      queueMicrotask(() => {
+        setPermissionState(current);
+      });
+    } else {
+      queueMicrotask(() => {
+        setPermissionState("unsupported");
+      });
+    }
+  }, []);
+
   // Sound chime & haptic feedback when order becomes ready
   useEffect(() => {
     if (displayOrder.status === "ready" && !hasAlertedReady) {
@@ -54,12 +83,12 @@ export default function CustomerOrderStatusPage({
         setHasAlertedReady(true);
       });
 
-      // Trigger haptic vibration on mobile
-      if (typeof window !== "undefined" && "vibrate" in navigator) {
-        try {
-          navigator.vibrate([200, 100, 200, 100, 400]);
-        } catch {}
-      }
+      // Trigger full hardware haptic pager vibration & sound chime
+      triggerHardwareBuzzer({
+        orderNumber: displayOrder.orderNumber,
+        orderId: displayOrder.id,
+        vanLocationName: vanLocation.spotName || "Van Window 1",
+      });
 
       // Celebratory confetti
       confetti({
@@ -68,29 +97,8 @@ export default function CustomerOrderStatusPage({
         origin: { y: 0.6 },
         colors: ["#34D399", "#DFAB6C", "#F4EFE6"],
       });
-
-      // Sound chime
-      try {
-        const AudioCtx =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-        if (AudioCtx) {
-          const ctx = new AudioCtx();
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = "sine";
-          osc.frequency.setValueAtTime(523.25, ctx.currentTime);
-          osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.15);
-          gain.gain.setValueAtTime(0.3, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.9);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.95);
-        }
-      } catch {}
     }
-  }, [displayOrder.status, hasAlertedReady]);
+  }, [displayOrder.status, displayOrder.orderNumber, displayOrder.id, vanLocation.spotName, hasAlertedReady]);
 
   const steps = [
     { key: "received", label: "Order Received", desc: "Ticket dispatched to van" },
@@ -178,6 +186,95 @@ export default function CustomerOrderStatusPage({
                 </span>
               </motion.div>
             )}
+          </div>
+
+          {/* SMART MOBILE VIBRATING PAGER & WEB PUSH */}
+          <div className="my-6 p-4 sm:p-5 rounded-2xl bg-black/40 border border-white/10 backdrop-blur-md">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center gap-3.5">
+                <div
+                  className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-inner ${
+                    permissionState === "granted"
+                      ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                      : "bg-[#3D2619] text-[#DFAB6C] border border-[#DFAB6C]/20"
+                  }`}
+                >
+                  <BellRing className={`w-5 h-5 ${permissionState === "granted" ? "animate-bounce" : ""}`} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                      Mobile Vibrating Pager
+                    </h3>
+                    <span
+                      className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold uppercase border ${
+                        permissionState === "granted"
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                          : permissionState === "denied"
+                          ? "bg-red-500/20 text-red-300 border-red-500/30"
+                          : "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                      }`}
+                    >
+                      {permissionState === "granted"
+                        ? "Active"
+                        : permissionState === "denied"
+                        ? "Disabled"
+                        : "Tap to Enable"}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#A8988B] mt-1">
+                    {permissionState === "granted"
+                      ? "Your phone will vibrate with custom haptic pulse & chime when ready."
+                      : permissionState === "denied"
+                      ? "Notifications blocked in browser. Re-enable in site permissions to get buzzer."
+                      : "Replicates physical restaurant buzzer on your phone even with screen locked."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                {permissionState !== "granted" && permissionState !== "unsupported" && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const res = await requestBuzzerPermission(
+                        displayOrder.id,
+                        displayOrder.orderNumber
+                      );
+                      setPermissionState(res.permission);
+                    }}
+                    className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#DFAB6C] to-[#E8BA7E] text-stone-950 text-xs font-bold hover:brightness-110 active:scale-95 transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <BellRing className="w-3.5 h-3.5" />
+                    <span>Enable Pager</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  disabled={isTestingBuzzer}
+                  onClick={() => {
+                    setIsTestingBuzzer(true);
+                    triggerHardwareBuzzer({
+                      orderNumber: displayOrder.orderNumber,
+                      orderId: displayOrder.id,
+                      vanLocationName: vanLocation.spotName || "Van Window 1",
+                    });
+                    setTimeout(() => setIsTestingBuzzer(false), 1600);
+                  }}
+                  className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    isTestingBuzzer
+                      ? "bg-emerald-500/20 border-emerald-400 text-emerald-300 animate-pulse"
+                      : "bg-white/10 hover:bg-white/15 border-white/10 text-white active:scale-95"
+                  }`}
+                >
+                  <Volume2 className="w-3.5 h-3.5 text-[#DFAB6C]" />
+                  <span>
+                    {isTestingBuzzer ? "Buzzing [300-100-300-100-600ms]..." : "Test Pager"}
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Step-by-Step Progress Pipeline */}

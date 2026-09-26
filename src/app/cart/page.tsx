@@ -31,9 +31,14 @@ import { useVan } from "@/context/VanContext";
 import { MENU_ITEMS } from "@/data/menuData";
 import { openRazorpayCheckout } from "@/lib/razorpayCheckout";
 import { formatWhatsAppReceipt, getWhatsAppReceiptUrl } from "@/lib/receiptNotifier";
+import { registerBuzzerServiceWorker } from "@/lib/pushBuzzer";
 
 export default function CartPage() {
   const router = useRouter();
+
+  React.useEffect(() => {
+    registerBuzzerServiceWorker();
+  }, []);
   const { items, updateQuantity, removeItem, clearCart, totalItems, subtotal, addItem } = useCart();
   const { user, openAuthModal } = useAuth();
   const { createOrder, vanLocation } = useVan();
