@@ -3,9 +3,43 @@ import {
   processEmployeeOpsQuery,
   CURATED_PARKING_SPOTS,
 } from "@/lib/employeeBaristaOpsEngine";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
+import { getCachedAgentData, setCachedAgentData } from "@/lib/agentCache";
+import {
+  BaristaOpsChatResponseSchema,
+  safeValidateAgentOutput,
+} from "@/lib/agentSchemas";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
+    // 1. IP-Based Rate Limiting (Max 15 queries / 60s per employee IP)
+    const clientIp = getClientIp(req);
+    const rateLimit = await checkRateLimit(clientIp, "barista-ops-chat", 15, 60);
+
+    const rateLimitHeaders = {
+      "X-RateLimit-Limit": rateLimit.limit.toString(),
+      "X-RateLimit-Remaining": rateLimit.remaining.toString(),
+      "X-RateLimit-Reset": rateLimit.reset.toString(),
+    };
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        {
+          error: "Too Many Requests to AI Ops Copilot. Please wait a moment.",
+          retryAfterSeconds: Math.max(1, rateLimit.reset - Math.floor(Date.now() / 1000)),
+        },
+        {
+          status: 429,
+          headers: {
+            ...rateLimitHeaders,
+            "Retry-After": Math.max(1, rateLimit.reset - Math.floor(Date.now() / 1000)).toString(),
+          },
+        }
+      );
+    }
+
     const body = await req.json();
     const {
       message,
@@ -18,7 +52,22 @@ export async function POST(req: NextRequest) {
     if (!message || typeof message !== "string") {
       return NextResponse.json(
         { error: "Message is required" },
-        { status: 400 }
+        { status: 400, headers: rateLimitHeaders }
+      );
+    }
+
+    const normalizedQuery = message.trim().toLowerCase();
+    const cacheKey = `barista_ops:${normalizedQuery}`;
+
+    // 2. 30-Minute Fallback Cache Check (Parking bays & weather recommendations)
+    const cachedResponse = await getCachedAgentData<Record<string, unknown>>(cacheKey);
+    if (cachedResponse) {
+      return NextResponse.json(
+        {
+          ...cachedResponse,
+          cached: true,
+        },
+        { headers: rateLimitHeaders }
       );
     }
 
@@ -73,19 +122,31 @@ Provide a direct, helpful, professional barista ops response in clean formatting
           const data = await res.json();
           const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
           if (rawText) {
-            // Also fetch structured spots or improvement plans for rich cards
             const localFallback = processEmployeeOpsQuery(message, {
               activeVanLocation,
               futureStops,
               reviews,
             });
 
-            return NextResponse.json({
+            const candidateResponse = {
               replyText: rawText,
-              recommendedSpots: localFallback.recommendedSpots,
-              improvementPlan: localFallback.improvementPlan,
-              quickReplies: localFallback.quickReplies,
-            });
+              recommendedSpots: localFallback.recommendedSpots || [],
+              improvementPlan: localFallback.improvementPlan || null,
+              quickReplies: localFallback.quickReplies || [],
+            };
+
+            // Zod Guardrail Validation
+            const validated = safeValidateAgentOutput(
+              BaristaOpsChatResponseSchema,
+              candidateResponse
+            );
+
+            if (validated.success) {
+              // Cache parking and ops recommendations for 30 minutes (1800s)
+              await setCachedAgentData(cacheKey, validated.data, 1800);
+
+              return NextResponse.json(validated.data, { headers: rateLimitHeaders });
+            }
           }
         }
       } catch (geminiErr) {
@@ -100,11 +161,21 @@ Provide a direct, helpful, professional barista ops response in clean formatting
       reviews,
     });
 
-    return NextResponse.json(localResult);
+    const validatedLocal = safeValidateAgentOutput(
+      BaristaOpsChatResponseSchema,
+      localResult
+    );
+
+    const finalResult = validatedLocal.success ? validatedLocal.data : localResult;
+
+    // Cache local result for 30 minutes
+    await setCachedAgentData(cacheKey, finalResult, 1800);
+
+    return NextResponse.json(finalResult, { headers: rateLimitHeaders });
   } catch (error) {
-    console.error("Barista ops chat route error:", error);
+    console.error("Barista ops chat error:", error);
     return NextResponse.json(
-      { error: "Failed to process barista operations query" },
+      { error: "Failed to process ops assistant query" },
       { status: 500 }
     );
   }
