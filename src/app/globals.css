@@ -1,26 +1,76 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-jakarta: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-playfair: 'Playfair Display', Georgia, serif;
+  --font-dm-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --bg-dark: #1A110B;
+  --bg-gradient-to: #24170F;
+  --text-primary: #F4EFE6;
+  --text-secondary: #8C7C70;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+@theme {
+  --font-display: var(--font-jakarta), system-ui, sans-serif;
+  --font-serif: var(--font-playfair), Georgia, serif;
+  --font-sans: var(--font-jakarta), var(--font-dm-sans), system-ui, sans-serif;
+  --color-espresso-950: #0D0805;
+  --color-espresso-900: #1A110B;
+  --color-espresso-800: #24170F;
+  --color-espresso-700: #332015;
+  --color-cream: #F4EFE6;
+  --color-amber-gold: #DFAB6C;
+  --color-warm-muted: #8C7C70;
+  --color-sage: #5B6E63;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #1A110B;
+  color: #F4EFE6;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  overflow-x: clip;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Elegant dark espresso scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #140D08;
+}
+::-webkit-scrollbar-thumb {
+  background: #3A261A;
+  border-radius: 9999px;
+  border: 2px solid #140D08;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #523827;
+}
+
+/* Custom glassmorphism utilities */
+.glass-nav {
+  background: rgba(40, 25, 15, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-card {
+  background: rgba(36, 23, 15, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.text-gold-gradient {
+  background: linear-gradient(135deg, #DFAB6C 0%, #F5D7B5 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }

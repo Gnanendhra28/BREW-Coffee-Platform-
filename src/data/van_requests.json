@@ -1,0 +1,90 @@
+[
+  {
+    "id": "req-1790061163743",
+    "contact": "host@google.com",
+    "organization": "Google Campus Hyderabad",
+    "location": "Kondapur Hub",
+    "eventDate": "Next Friday",
+    "crowdSize": "180",
+    "notes": "Need fast service during lunch break",
+    "timestamp": "Tuesday, 22 September 2026 at 12:42:43 pm",
+    "businessEmail": "mattag@iitbhilai.ac.in",
+    "emailSent": false,
+    "quotation": {
+      "organization": "Google Campus Hyderabad",
+      "location": "Kondapur Hub",
+      "estimatedCrowd": 180,
+      "baristasAssigned": 2,
+      "vanOperationalHours": "4 Hours Dedicated On-Site Window Service",
+      "powerRequirement": "16A Single Phase (or Van Internal Silent Inverter)",
+      "ingredientAllocation": {
+        "coffeeBeansKg": 4.2,
+        "milkLiters": 37.4,
+        "cupsCount": 252,
+        "pastriesCount": 126
+      },
+      "travelDistanceFee": 1500,
+      "terms": "Includes complete curbside bar setup, outdoor QR board, live barista service, paper cups, sleeves & napkins.",
+      "tiers": [
+        {
+          "name": "Classic Brew",
+          "pricePerGuest": 180,
+          "totalAmount": 33900,
+          "perks": [
+            "Single-Origin Espresso, Americano, Classic Filter Coffee",
+            "Imperial Black & Herbal Green Teas",
+            "1 Dedicated Certified Barista"
+          ]
+        },
+        {
+          "name": "Artisanal Signature",
+          "pricePerGuest": 260,
+          "totalAmount": 48300,
+          "isRecommended": true,
+          "perks": [
+            "Full Coffee Menu: Flat Whites, Cappuccinos, Cold Brew, Mochas",
+            "Whole Milk & Vegan Oat Milk bar",
+            "Fresh Cinnamon Roll & Brownie Bites pairing",
+            "2 Dedicated Baristas for rapid 45s service speed",
+            "Digital Order Board display with custom host branding"
+          ]
+        },
+        {
+          "name": "VIP Unlimited Bar",
+          "pricePerGuest": 360,
+          "totalAmount": 66300,
+          "perks": [
+            "Unlimited Specialty Coffees, Belgian Shakes & Mango Coolers",
+            "Full Artisan Bakery spread (Tiramisu cups, Choco Lava, Cookies)",
+            "Dedicated 3-Barista Crew + Curbside Express Handover",
+            "Personalized cup branding stickers for your company"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "req-1789920926169",
+    "contact": "gnanendrajoy@gmail.com",
+    "organization": "IIT Bhilai",
+    "location": "Bhilai",
+    "eventDate": "1-Oct",
+    "crowdSize": "100–300 People",
+    "notes": "",
+    "timestamp": "Sunday, 20 September 2026 at 9:45:26 pm",
+    "businessEmail": "mattag@iitbhilai.ac.in",
+    "emailSent": false
+  },
+  {
+    "id": "req-init-test",
+    "contact": "gnanendrajoy@gmail.com",
+    "organization": "IIT Bhilai",
+    "location": "Bhilai Campus Hub",
+    "eventDate": "1-Oct",
+    "crowdSize": "300–500 People",
+    "notes": "Requested espresso van deployment for campus community",
+    "timestamp": "2026-09-20T15:45:00.000Z",
+    "businessEmail": "mattag@iitbhilai.ac.in",
+    "emailSent": false
+  }
+]
