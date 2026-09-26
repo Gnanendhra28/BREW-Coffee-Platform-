@@ -9,6 +9,15 @@ import {
   FlashDealConfig,
   DEFAULT_FLASH_DEAL,
 } from "@/lib/smartAgentsEngine";
+import {
+  initRealtimeCloudSync,
+  dispatchCloudOrder,
+  dispatchCloudOrderStatus,
+  dispatchCloudInventory,
+  dispatchCloudLocation,
+  dispatchCloudFutureStops,
+  dispatchCloudCurbside,
+} from "@/lib/realtimeDb";
 
 export type OrderStatus = "received" | "brewing" | "ready" | "served" | "cancelled";
 
@@ -276,6 +285,57 @@ export const VanProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
+  // Real-Time Cloud Synchronization Engine (<500ms multi-device updates)
+  useEffect(() => {
+    const unsubCloud = initRealtimeCloudSync({
+      onInitialSync: (data) => {
+        if (data.orders && data.orders.length > 0) {
+          setOrders(data.orders);
+        }
+        if (data.inventory) {
+          setInventory(data.inventory);
+        }
+        if (data.vanLocation) {
+          setVanLocation(data.vanLocation);
+        }
+        if (data.futureStops && data.futureStops.length > 0) {
+          setFutureStops(data.futureStops);
+        }
+        if (data.curbsideArrivals) {
+          setCurbsideArrivals(data.curbsideArrivals);
+        }
+      },
+      onOrderCreated: (newOrder) => {
+        setOrders((prev) => {
+          if (prev.some((o) => o.id === newOrder.id)) return prev;
+          return [...prev, newOrder];
+        });
+      },
+      onOrderStatusChanged: (orderId, status) => {
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, status } : o))
+        );
+      },
+      onInventoryChanged: (inv) => {
+        setInventory(inv);
+      },
+      onLocationChanged: (loc) => {
+        setVanLocation((prev) => ({ ...prev, ...loc }));
+      },
+      onFutureStopsChanged: (stops) => {
+        setFutureStops(stops);
+      },
+      onCurbsideSignal: (orderId, status) => {
+        setCurbsideArrivals((prev) => ({ ...prev, [orderId]: status }));
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, curbsideArrivalStatus: status } : o))
+        );
+      },
+    });
+
+    return () => unsubCloud();
+  }, []);
+
   // Save changes
   useEffect(() => {
     if (isInitialized && typeof window !== "undefined") {
@@ -320,15 +380,21 @@ export const VanProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [curbsideArrivals, isInitialized]);
 
   const consumeIngredients = (items: { name: string; quantity: number }[]) => {
-    setInventory((prev) => deductOrderIngredients(prev, items));
+    setInventory((prev) => {
+      const next = deductOrderIngredients(prev, items);
+      dispatchCloudInventory(next);
+      return next;
+    });
   };
 
   const restockInventory = (patch?: Partial<InventoryStock>) => {
-    setInventory({
+    const next = {
       ...DEFAULT_INVENTORY_STOCK,
       ...patch,
       lastRestockedAt: Date.now(),
-    });
+    };
+    setInventory(next);
+    dispatchCloudInventory(next);
   };
 
   const toggleFlashDeal = (active?: boolean) => {
@@ -352,6 +418,7 @@ export const VanProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, curbsideArrivalStatus: status } : o))
     );
+    dispatchCloudCurbside(orderId, status);
   };
 
   const createOrder = (orderData: {
@@ -387,9 +454,12 @@ export const VanProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setOrders((prev) => [...prev, newOrder]);
+    dispatchCloudOrder(newOrder);
 
     // Automatically trigger Inventory Sentinel deduction
-    setInventory((prev) => deductOrderIngredients(prev, orderData.items));
+    const updatedInventory = deductOrderIngredients(inventory, orderData.items);
+    setInventory(updatedInventory);
+    dispatchCloudInventory(updatedInventory);
 
     return orderId;
   };
@@ -398,6 +468,7 @@ export const VanProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status } : o))
     );
+    dispatchCloudOrderStatus(orderId, status);
   };
 
   const toggleSoldOut = (itemId: string) => {
@@ -407,7 +478,11 @@ export const VanProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateVanLocation = (locationPatch: Partial<VanLocation>) => {
-    setVanLocation((prev) => ({ ...prev, ...locationPatch }));
+    setVanLocation((prev) => {
+      const next = { ...prev, ...locationPatch };
+      dispatchCloudLocation(next);
+      return next;
+    });
   };
 
   const addFutureStop = (stopData: Omit<FutureVanStop, "id" | "createdAt">): string => {
@@ -417,24 +492,34 @@ export const VanProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id,
       createdAt: Date.now(),
     };
-    setFutureStops((prev) => [newStop, ...prev]);
+    setFutureStops((prev) => {
+      const next = [newStop, ...prev];
+      dispatchCloudFutureStops(next);
+      return next;
+    });
     return id;
   };
 
   const updateFutureStop = (id: string, patch: Partial<FutureVanStop>) => {
-    setFutureStops((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...patch } : s))
-    );
+    setFutureStops((prev) => {
+      const next = prev.map((s) => (s.id === id ? { ...s, ...patch } : s));
+      dispatchCloudFutureStops(next);
+      return next;
+    });
   };
 
   const deleteFutureStop = (id: string) => {
-    setFutureStops((prev) => prev.filter((s) => s.id !== id));
+    setFutureStops((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      dispatchCloudFutureStops(next);
+      return next;
+    });
   };
 
   const setStopAsLiveToday = (stopId: string) => {
     const stop = futureStops.find((s) => s.id === stopId);
     if (!stop) return;
-    setVanLocation({
+    const nextLoc: VanLocation = {
       spotName: stop.spotName,
       address: stop.address,
       city: `${stop.city}, ${stop.state}`,
@@ -445,7 +530,9 @@ export const VanProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         stop.state === "Andhra Pradesh"
           ? { lat: 17.6868, lng: 83.2185 }
           : { lat: 17.4504, lng: 78.3808 },
-    });
+    };
+    setVanLocation(nextLoc);
+    dispatchCloudLocation(nextLoc);
   };
 
   // Filtered queues

@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Orders collection: Allow reads and writes for real-time order lifecycle
+    match /orders/{orderId} {
+      allow read: if true;
+      allow create: if request.resource.data.orderNumber is string;
+      allow update: if true;
+      allow delete: if request.auth != null;
+    }
+    
+    // Inventory: Real-time stock readings and deductions
+    match /inventory/{docId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Van Location and Status
+    match /vans/{vanId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Future stops tour schedule
+    match /future_stops/{stopId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Curbside alerts
+    match /curbside_arrivals/{orderId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Reviews collection
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if request.resource.data.rating >= 1 && request.resource.data.rating <= 5;
+      allow update, delete: if request.auth != null;
+    }
+  }
+}

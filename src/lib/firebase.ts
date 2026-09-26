@@ -41,4 +41,13 @@ if (typeof window !== "undefined") {
   });
 }
 
-export { app, analytics };
+import { getFirestore, type Firestore } from "firebase/firestore";
+
+let db: Firestore | null = null;
+try {
+  db = getFirestore(app);
+} catch (e) {
+  console.warn("Firestore initialization error:", e);
+}
+
+export { app, analytics, db };
