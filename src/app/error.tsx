@@ -2,8 +2,9 @@
 
 import React, { useEffect } from "react";
 import { AlertCircle, RotateCcw } from "lucide-react";
+import { sentry } from "@/lib/observability/sentry";
 
-export default function GlobalError({
+export default function RouteError({
   error,
   reset,
 }: {
@@ -11,7 +12,10 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("BREW Runtime Error Caught:", error);
+    sentry.captureException(error, {
+      boundary: "route-error",
+      digest: error.digest,
+    });
   }, [error]);
 
   return (

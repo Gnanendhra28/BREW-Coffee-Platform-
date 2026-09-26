@@ -32,6 +32,7 @@ import { MENU_ITEMS } from "@/data/menuData";
 import { openRazorpayCheckout } from "@/lib/razorpayCheckout";
 import { formatWhatsAppReceipt, getWhatsAppReceiptUrl } from "@/lib/receiptNotifier";
 import { registerBuzzerServiceWorker } from "@/lib/pushBuzzer";
+import { analytics } from "@/lib/observability/analytics";
 
 export default function CartPage() {
   const router = useRouter();
@@ -179,6 +180,13 @@ export default function CartPage() {
             setOrderConfirmed(true);
             setIsPlacingOrder(false);
 
+            analytics.trackOrderCompleted({
+              id: newOrderId,
+              totalAmount: finalTotal,
+              pickupType,
+              itemCount: totalItems,
+            });
+
             confetti({
               particleCount: 80,
               spread: 70,
@@ -231,6 +239,13 @@ export default function CartPage() {
         setConfirmedOrderId(newOrderId);
         setOrderConfirmed(true);
         setIsPlacingOrder(false);
+
+        analytics.trackOrderCompleted({
+          id: newOrderId,
+          totalAmount: finalTotal,
+          pickupType,
+          itemCount: totalItems,
+        });
 
         confetti({
           particleCount: 80,

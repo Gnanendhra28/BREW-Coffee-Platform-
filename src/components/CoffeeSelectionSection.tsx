@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Plus, Check, Star, ArrowRight } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useCart } from "@/context/CartContext";
+import { analytics } from "@/lib/observability/analytics";
 
 interface Product {
   id: string;
@@ -65,6 +66,12 @@ export const CoffeeSelectionSection: React.FC<CoffeeSelectionSectionProps> = ({
       name: product.name,
       price: product.price,
       image: product.image,
+      category: "coffee",
+    });
+    analytics.trackCartItemAdded({
+      id: product.id,
+      name: product.name,
+      price: product.price,
       category: "coffee",
     });
     if (onAddToCart) {
