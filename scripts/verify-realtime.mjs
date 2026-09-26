@@ -19,6 +19,7 @@ async function runRealtimeTest() {
       sseResolved = true;
 
       res.on("data", (chunk) => {
+        if (!sseResolved) sseResolved = true;
         const text = chunk.toString();
         const lines = text.split("\n");
         for (const line of lines) {
@@ -40,7 +41,7 @@ async function runRealtimeTest() {
                   process.exit(0);
                 }, 500);
               }
-            } catch (e) {
+            } catch {
               // ignore partial lines
             }
           }

@@ -26,7 +26,11 @@ import {
   Share2,
   Copy,
   Check,
+  LogOut,
+  Shield,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import { useVan, OrderStatus } from "@/context/VanContext";
 import { MENU_ITEMS } from "@/data/menuData";
 import { BaristaOpsAssistant } from "@/components/BaristaOpsAssistant";
@@ -54,6 +58,9 @@ export default function BaristaKDSPage() {
     toggleFlashDeal,
     curbsideArrivals,
   } = useVan();
+
+  const router = useRouter();
+  const { user, signOutUser } = useAuth();
 
   const [filterTab, setFilterTab] = useState<
     "active" | "all" | "inventory" | "settings" | "dispatch"
@@ -317,6 +324,32 @@ export default function BaristaKDSPage() {
             <span>Outdoor Board</span>
             <ExternalLink className="w-3 h-3" />
           </Link>
+
+          {/* Staff Shift Identity & Lock KDS */}
+          {user && (
+            <div className="flex items-center gap-2 pl-2 border-l border-white/10">
+              <div className="hidden sm:flex flex-col text-right">
+                <span className="text-xs font-bold text-white flex items-center gap-1 justify-end">
+                  <Shield className="w-3 h-3 text-[#DFAB6C]" />
+                  <span>{user.displayName || "Active Shift"}</span>
+                </span>
+                <span className="text-[10px] text-[#DFAB6C] uppercase font-mono tracking-wider font-semibold">
+                  {user.role}
+                </span>
+              </div>
+              <button
+                onClick={async () => {
+                  await signOutUser();
+                  router.push("/login?redirect=/barista");
+                }}
+                className="px-2.5 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                title="Lock KDS & End Shift"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden md:inline text-[11px] font-semibold">Lock KDS</span>
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
