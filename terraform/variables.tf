@@ -1,7 +1,7 @@
 variable "project_id" {
-  description = "Google Cloud Project ID or AWS Account ID"
+  description = "Google Cloud Project ID"
   type        = string
-  default     = "brew-coffee-platform"
+  default     = "hiring-ai-507307"
 }
 
 variable "region" {

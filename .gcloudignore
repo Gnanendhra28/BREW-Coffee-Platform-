@@ -1,0 +1,10 @@
+.gcloudignore
+.git
+.gitignore
+node_modules/
+.next/
+coverage/
+playwright-report/
+test-results/
+*.log
+.DS_Store
