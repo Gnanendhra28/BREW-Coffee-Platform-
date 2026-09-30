@@ -135,6 +135,7 @@ export default function CartPage() {
           customerName,
           customerPhone: phone,
           customerEmail: user?.email || "guest@brew.cafe",
+          isLive: Boolean(orderData.isLive),
           onSuccess: async (rzpResponse) => {
             // Verify payment signature
             await fetch("/api/payments/verify", {
