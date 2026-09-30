@@ -9,6 +9,7 @@ const testSuites = [
   { name: "Inventory Sentinel: Burn Rate & Stockout Engine", script: "scripts/verify-sentinel.mjs" },
   { name: "Curbside Expediter: Virtual Drive-Thru & Extraction Sync", script: "scripts/verify-curbside.mjs" },
   { name: "Yield Optimizer: Flash Deals & Waste Prevention Engine", script: "scripts/verify-yield-optimizer.mjs" },
+  { name: "Event Booking Concierge: Instant 3-Tier Catering Engine", script: "scripts/verify-event-concierge.mjs" },
   { name: "Phase 2: Authentication & RBAC Edge Security", script: "scripts/verify-auth.mjs" },
   { name: "Phase 3: Payments Gateway & WhatsApp Receipts", script: "scripts/verify-payments.mjs" },
   { name: "Phase 4: Web Push Notifications & Hardware Buzzer", script: "scripts/verify-buzzer.mjs" },

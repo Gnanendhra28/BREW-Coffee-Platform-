@@ -202,7 +202,7 @@ export function analyzeStockDepletion(stock: InventoryStock): DepletionAlert[] {
   return alerts;
 }
 
-import { FlashDealSchema } from "./agentSchemas";
+import { FlashDealSchema, EventQuotationSchema } from "./agentSchemas";
 
 // -------------------------------------------------------------
 // 2. FLASH DEAL & YIELD OPTIMIZER ENGINE (Agent #3)
@@ -373,7 +373,7 @@ export function generateEventQuotation(params: {
   const cupsCount = Math.ceil(crowd * 1.4);
   const pastriesCount = Math.ceil(crowd * 0.7);
 
-  return {
+  const quotation: EventQuotation = {
     organization: params.organization || "Corporate / Campus Host",
     location: params.location || "City Hub",
     estimatedCrowd: crowd,
@@ -425,6 +425,8 @@ export function generateEventQuotation(params: {
       },
     ],
   };
+
+  return EventQuotationSchema.parse(quotation) as EventQuotation;
 }
 
 // -------------------------------------------------------------

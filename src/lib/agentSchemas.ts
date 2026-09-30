@@ -83,9 +83,16 @@ export const EventQuotationSchema = z.object({
   estimatedCrowd: z.number().int().positive(),
   baristasAssigned: z.number().int().positive(),
   vanOperationalHours: z.string(),
+  powerRequirement: z.string().default("16A Single Phase (or Van Internal Silent Inverter)"),
+  ingredientAllocation: z.object({
+    coffeeBeansKg: z.number().positive(),
+    milkLiters: z.number().positive(),
+    cupsCount: z.number().int().positive(),
+    pastriesCount: z.number().int().positive(),
+  }),
   tiers: z.array(EventQuotationTierSchema).min(1),
-  travelDistanceFee: z.number().nonnegative().default(0),
-  terms: z.string().default("50% advance booking required."),
+  travelDistanceFee: z.number().nonnegative().default(1500),
+  terms: z.string().default("Includes complete curbside bar setup, outdoor QR board, live barista service, paper cups, sleeves & napkins."),
 });
 
 export type EventQuotationOutput = z.infer<typeof EventQuotationSchema>;

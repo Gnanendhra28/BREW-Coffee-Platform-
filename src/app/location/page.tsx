@@ -19,9 +19,13 @@ import {
   Calendar,
   Users,
   AlertCircle,
+  Sparkles,
+  Check,
+  Copy,
 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { useVan } from "@/context/VanContext";
+import { generateEventQuotation, type EventQuotation } from "@/lib/smartAgentsEngine";
 
 export default function VanLocationPage() {
   const { vanLocation, futureStops } = useVan();
@@ -48,6 +52,9 @@ export default function VanLocationPage() {
   } | null>(null);
   const [mailtoBackup, setMailtoBackup] = useState("");
   const [gmailUrl, setGmailUrl] = useState("");
+  const [quotation, setQuotation] = useState<EventQuotation | null>(null);
+  const [selectedTier, setSelectedTier] = useState<string>("Artisanal Signature");
+  const [copiedQuote, setCopiedQuote] = useState(false);
 
   const filteredFutureStops = futureStops.filter(
     (item) => activeFilter === "all" || item.state === activeFilter,
@@ -86,6 +93,9 @@ export default function VanLocationPage() {
         location: requestLocation.trim() || "Local Hub",
       });
 
+      if (data.quotation) {
+        setQuotation(data.quotation);
+      }
       if (data.mailtoUrl) {
         setMailtoBackup(data.mailtoUrl);
       }
@@ -96,6 +106,14 @@ export default function VanLocationPage() {
       setSubmitSuccess(true);
     } catch (err) {
       console.error("Failed to send van request:", err);
+      const fallbackQuote = generateEventQuotation({
+        organization: requestOrg.trim() || "Campus / Office",
+        location: requestLocation.trim() || "Local Hub",
+        crowdSizeStr: requestCrowd,
+        eventDate: requestDate.trim() || "Upcoming",
+      });
+      setQuotation(fallbackQuote);
+
       // Fallback mailto & Gmail URLs directly to mattag@iitbhilai.ac.in
       const subj = `Van Request: ${requestOrg || "Campus"} (${requestLocation || "Location"})`;
       const body = `Contact: ${notifyContact}\nOrg: ${requestOrg}\nLocation: ${requestLocation}\nCrowd: ${requestCrowd}\nNotes: ${requestNotes}`;
@@ -503,7 +521,7 @@ export default function VanLocationPage() {
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="relative w-full max-w-lg rounded-3xl bg-[#22160F] border-2 border-[#DFAB6C]/40 shadow-2xl p-6 sm:p-8 my-8 text-left"
+                className="relative w-full max-w-2xl rounded-3xl bg-[#22160F] border-2 border-[#DFAB6C]/40 shadow-2xl p-6 sm:p-8 my-8 text-left max-h-[90vh] overflow-y-auto"
               >
                 {/* Close Button */}
                 <button
@@ -513,8 +531,198 @@ export default function VanLocationPage() {
                   <X className="w-4 h-4" />
                 </button>
 
-                {submitSuccess ? (
-                  /* Success Screen */
+                {submitSuccess && quotation ? (
+                  /* Interactive 3-Tier Quotation Screen (Agent #4) */
+                  <div className="py-2 space-y-5">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-4">
+                      <div>
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono font-bold uppercase tracking-wider mb-1.5">
+                          <Sparkles className="w-3 h-3" />
+                          <span>AI Event Concierge · Quoted in &lt;100ms</span>
+                        </div>
+                        <h3 className="text-xl sm:text-2xl font-serif font-bold text-white">
+                          Catering Quotation for {lastSubmitted?.organization}
+                        </h3>
+                        <p className="text-xs text-[#8C7C70] mt-0.5">
+                          📍 {lastSubmitted?.location} • 👥 {quotation.estimatedCrowd} Guests • 📞 {lastSubmitted?.contact}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Operational Logistics & Ingredient Allocations */}
+                    <div className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] uppercase tracking-wider font-bold text-[#DFAB6C]">
+                          📦 Certified Ingredient Allocation &amp; Crew Specs
+                        </span>
+                        <span className="text-[10px] font-mono text-[#8C7C70]">
+                          Zero Stockout Guarantee
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                        <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                          <span className="text-[10px] text-[#8C7C70] uppercase block">Barista Crew</span>
+                          <span className="font-bold text-white">{quotation.baristasAssigned} Certified Baristas</span>
+                          <span className="text-[9px] text-[#A8988B] block mt-0.5">45s service speed</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                          <span className="text-[10px] text-[#8C7C70] uppercase block">Single-Origin Beans</span>
+                          <span className="font-bold text-amber-300 font-mono">{quotation.ingredientAllocation.coffeeBeansKg} kg</span>
+                          <span className="text-[9px] text-[#A8988B] block mt-0.5">18g dose + 30% buffer</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                          <span className="text-[10px] text-[#8C7C70] uppercase block">Farm Fresh Milk</span>
+                          <span className="font-bold text-white font-mono">{quotation.ingredientAllocation.milkLiters} Liters</span>
+                          <span className="text-[9px] text-[#A8988B] block mt-0.5">Dairy &amp; Oat included</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                          <span className="text-[10px] text-[#8C7C70] uppercase block">Artisanal Paper Cups</span>
+                          <span className="font-bold text-white font-mono">{quotation.ingredientAllocation.cupsCount} Cups</span>
+                          <span className="text-[9px] text-[#A8988B] block mt-0.5">Includes 40% refills</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                          <span className="text-[10px] text-[#8C7C70] uppercase block">Bakery Pastries</span>
+                          <span className="font-bold text-white font-mono">{quotation.ingredientAllocation.pastriesCount} Pieces</span>
+                          <span className="text-[9px] text-[#A8988B] block mt-0.5">Fresh 1-day bake</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                          <span className="text-[10px] text-[#8C7C70] uppercase block">Power Requirement</span>
+                          <span className="font-bold text-emerald-400 text-[11px] truncate block">{quotation.powerRequirement}</span>
+                          <span className="text-[9px] text-[#A8988B] block mt-0.5">Silent inverter backup</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Interactive 3-Tier Quotation Cards */}
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] uppercase tracking-wider font-bold text-[#DFAB6C]">
+                          🏷️ Select Your Service Tier:
+                        </span>
+                        <span className="text-[10px] text-[#8C7C70]">
+                          Includes ₹{quotation.travelDistanceFee} distance &amp; van setup fee
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {quotation.tiers.map((tier) => {
+                          const isSelected = selectedTier === tier.name;
+                          return (
+                            <button
+                              key={tier.name}
+                              type="button"
+                              onClick={() => setSelectedTier(tier.name)}
+                              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
+                                isSelected
+                                  ? "bg-gradient-to-b from-[#2E1D13] to-[#1E120B] border-[#DFAB6C] ring-2 ring-[#DFAB6C]/40 shadow-xl"
+                                  : "bg-black/30 border-white/10 hover:border-white/20 text-[#A8988B]"
+                              }`}
+                            >
+                              {tier.isRecommended && (
+                                <span className="absolute -top-2.5 right-3 px-2 py-0.5 rounded-full bg-emerald-500 text-stone-950 font-bold text-[9px] uppercase tracking-wider shadow">
+                                  Recommended
+                                </span>
+                              )}
+
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <h4 className="text-xs font-bold text-white">
+                                    {tier.name}
+                                  </h4>
+                                  {isSelected && (
+                                    <Check className="w-4 h-4 text-[#DFAB6C]" />
+                                  )}
+                                </div>
+                                <div className="my-1.5">
+                                  <span className="text-lg font-extrabold text-[#DFAB6C] font-mono">
+                                    ₹{tier.totalAmount.toLocaleString("en-IN")}
+                                  </span>
+                                  <span className="text-[10px] text-[#8C7C70] block font-mono">
+                                    ₹{tier.pricePerGuest}/guest
+                                  </span>
+                                </div>
+                              </div>
+
+                              <ul className="mt-2 space-y-1 text-[10px] text-[#C4B4A8] border-t border-white/5 pt-2">
+                                {tier.perks.map((perk, pIdx) => (
+                                  <li key={pIdx} className="line-clamp-2 leading-tight flex items-start gap-1">
+                                    <span className="text-[#DFAB6C] shrink-0">•</span>
+                                    <span>{perk}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 1-Click Booking & Dispatch Actions */}
+                    <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+                      {gmailUrl && (
+                        <a
+                          href={gmailUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 py-3 px-4 rounded-xl bg-[#EA4335] hover:bg-[#d93025] text-white text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#EA4335]/25"
+                        >
+                          <Mail className="w-4 h-4" />
+                          <span>Confirm {selectedTier} via Gmail</span>
+                        </a>
+                      )}
+
+                      {mailtoBackup && (
+                        <a
+                          href={mailtoBackup}
+                          className="py-3 px-4 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 text-[#DFAB6C]" />
+                          <span>Mail App</span>
+                        </a>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const quoteSummary = `BREW Mobile Coffee Van Quotation for ${lastSubmitted?.organization}\nLocation: ${lastSubmitted?.location}\nCrowd: ${quotation.estimatedCrowd} Guests\nSelected Tier: ${selectedTier}\nTotal: ₹${quotation.tiers.find(t => t.name === selectedTier)?.totalAmount.toLocaleString("en-IN")}\nCrew: ${quotation.baristasAssigned} Baristas\nBeans: ${quotation.ingredientAllocation.coffeeBeansKg}kg\nMilk: ${quotation.ingredientAllocation.milkLiters}L\nCups: ${quotation.ingredientAllocation.cupsCount}\nOfficial Desk: ${BUSINESS_EMAIL}`;
+                          navigator.clipboard.writeText(quoteSummary);
+                          setCopiedQuote(true);
+                          setTimeout(() => setCopiedQuote(false), 2500);
+                        }}
+                        className="py-3 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        {copiedQuote ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Copied to Clipboard!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-[#DFAB6C]" />
+                            <span>Copy Quote</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsModalOpen(false);
+                          setSubmitSuccess(false);
+                          setNotifyContact("");
+                          setRequestOrg("");
+                          setRequestLocation("");
+                        }}
+                        className="py-3 px-4 rounded-xl bg-[#DFAB6C] hover:bg-white text-stone-950 text-xs font-bold transition-all cursor-pointer"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                ) : submitSuccess ? (
+                  /* Simple Success Fallback */
                   <div className="py-6 text-center space-y-4">
                     <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto text-3xl">
                       ✓
@@ -538,55 +746,13 @@ export default function VanLocationPage() {
                       </span>
                       .
                     </p>
-                    <div className="p-3 rounded-xl bg-black/40 border border-white/10 text-[11px] text-[#8C7C70] font-mono">
-                      Contact on file: {lastSubmitted?.contact}
-                    </div>
-
-                    <div className="pt-3 p-3.5 rounded-xl bg-[#DFAB6C]/10 border border-[#DFAB6C]/30 text-xs text-[#DFAB6C] space-y-1.5 text-left">
-                      <p className="font-semibold flex items-center gap-1.5 text-[#F4EFE6]">
-                        <Mail className="w-3.5 h-3.5 text-[#DFAB6C]" /> Instant
-                        Email Delivery to Operations Desk:
-                      </p>
-                      <p className="text-[11px] text-[#EDE4DA]/80 leading-relaxed">
-                        To guarantee your request reaches{" "}
-                        <strong className="text-[#DFAB6C]">
-                          {BUSINESS_EMAIL}
-                        </strong>{" "}
-                        immediately, click the button below to open your
-                        pre-filled message:
-                      </p>
-                    </div>
-
-                    <div className="pt-3 flex flex-col sm:flex-row gap-2">
-                      {gmailUrl && (
-                        <a
-                          href={gmailUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 py-2.5 px-3.5 rounded-xl bg-[#EA4335] hover:bg-[#d93025] text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-[#EA4335]/25"
-                        >
-                          <Mail className="w-3.5 h-3.5" />
-                          <span>Send via Gmail (1-Click)</span>
-                        </a>
-                      )}
-                      {mailtoBackup && (
-                        <a
-                          href={mailtoBackup}
-                          className="py-2.5 px-3.5 rounded-xl bg-[#DFAB6C] hover:bg-white text-[#1A110B] text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          <span>Mail App</span>
-                        </a>
-                      )}
+                    <div className="pt-3 flex justify-center">
                       <button
                         onClick={() => {
                           setIsModalOpen(false);
                           setSubmitSuccess(false);
-                          setNotifyContact("");
-                          setRequestOrg("");
-                          setRequestLocation("");
                         }}
-                        className="py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-all cursor-pointer"
+                        className="py-2.5 px-6 rounded-xl bg-[#DFAB6C] text-stone-950 text-xs font-bold cursor-pointer"
                       >
                         Done
                       </button>

@@ -130,7 +130,64 @@ Respond directly to the customer at ${contact}.
 
     <div class="row">
       <span class="label">Expected Crowd:</span>
-      <span class="value">${crowdSize}</span>
+      <span class="value">${crowdSize} (${quotation.estimatedCrowd} guests evaluated)</span>
+    </div>
+
+    <div style="margin: 20px 0; padding: 16px; background: rgba(223, 171, 108, 0.08); border: 1px solid rgba(223, 171, 108, 0.25); border-radius: 12px;">
+      <h3 style="color: #DFAB6C; font-size: 14px; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 1px;">
+        🤖 Agent #4 Instant Catering Logistics
+      </h3>
+      <div class="row">
+        <span class="label">Baristas Assigned:</span>
+        <span class="value">${quotation.baristasAssigned} Crew</span>
+      </div>
+      <div class="row">
+        <span class="label">Beans Allocation:</span>
+        <span class="value">${quotation.ingredientAllocation.coffeeBeansKg} kg</span>
+      </div>
+      <div class="row">
+        <span class="label">Milk Allocation:</span>
+        <span class="value">${quotation.ingredientAllocation.milkLiters} Liters</span>
+      </div>
+      <div class="row">
+        <span class="label">Paper Cups Count:</span>
+        <span class="value">${quotation.ingredientAllocation.cupsCount} cups</span>
+      </div>
+      <div class="row">
+        <span class="label">Bakery Pastries:</span>
+        <span class="value">${quotation.ingredientAllocation.pastriesCount} pieces</span>
+      </div>
+      <div class="row">
+        <span class="label">Power Requirement:</span>
+        <span class="value">${quotation.powerRequirement}</span>
+      </div>
+      <div class="row">
+        <span class="label">Operational Service:</span>
+        <span class="value">${quotation.vanOperationalHours}</span>
+      </div>
+    </div>
+
+    <div style="margin-top: 16px;">
+      <h3 style="color: #FFFFFF; font-size: 14px; margin-bottom: 8px;">3-Tier Package Quotations:</h3>
+      ${quotation.tiers
+        .map(
+          (t) => `
+        <div style="padding: 10px 14px; margin-bottom: 8px; border-radius: 8px; background: ${
+          t.isRecommended ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.03)"
+        }; border: 1px solid ${t.isRecommended ? "#10B981" : "rgba(255, 255, 255, 0.1)"};">
+          <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <strong style="color: ${t.isRecommended ? "#10B981" : "#FFFFFF"}; font-size: 13px;">
+              ${t.name} ${t.isRecommended ? "★ [RECOMMENDED]" : ""}
+            </strong>
+            <strong style="color: #DFAB6C; font-size: 14px;">₹${t.totalAmount.toLocaleString("en-IN")} (₹${t.pricePerGuest}/guest)</strong>
+          </div>
+          <div style="font-size: 11px; color: #A8988B; margin-top: 4px;">
+            ${t.perks.join(" • ")}
+          </div>
+        </div>
+      `
+        )
+        .join("")}
     </div>
 
     ${
