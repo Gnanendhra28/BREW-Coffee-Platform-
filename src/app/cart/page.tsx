@@ -19,8 +19,7 @@ import {
   ChevronRight,
   ArrowRight,
   X,
-  Smartphone,
-  CreditCard,
+  Store,
   MessageSquare,
 } from "lucide-react";
 import confetti from "canvas-confetti";
@@ -29,7 +28,6 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { useVan } from "@/context/VanContext";
 import { MENU_ITEMS } from "@/data/menuData";
-import { openRazorpayCheckout } from "@/lib/razorpayCheckout";
 import { formatWhatsAppReceipt, getWhatsAppReceiptUrl } from "@/lib/receiptNotifier";
 import { registerBuzzerServiceWorker } from "@/lib/pushBuzzer";
 import { analytics } from "@/lib/observability/analytics";
@@ -46,7 +44,6 @@ export default function CartPage() {
 
   const [guestName, setGuestName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"razorpay" | "counter">("razorpay");
   const [paymentId, setPaymentId] = useState("");
   const [digitalReceiptUrl, setDigitalReceiptUrl] = useState("");
   const [paymentError, setPaymentError] = useState("");
@@ -106,160 +103,59 @@ export default function CartPage() {
     const phone = customerPhone.trim();
 
     try {
-      if (paymentMethod === "razorpay") {
-        // 1. Request server to create Razorpay Order
-        const orderRes = await fetch("/api/payments/create-order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount: finalTotal,
-            currency: "INR",
-            customerName,
-            customerPhone: phone,
-            vanLocationName: vanLocation.spotName,
-          }),
-        });
+      // Counter / Outlet payment
+      const newOrderId = createOrder({
+        customerName,
+        customerPhone: phone,
+        items: [...items],
+        notes: baristaNotes,
+        totalAmount: finalTotal,
+        pickupType,
+        vehicleInfo: pickupType === "curbside" ? vehicleInfo : undefined,
+        vanLocationName: vanLocation.spotName,
+        paymentStatus: "pending",
+        paymentMethod: "Pay at Outlet",
+      });
 
-        if (!orderRes.ok) {
-          const errData = await orderRes.json();
-          throw new Error(errData.error || "Payment gateway connection failed");
-        }
+      const receiptText = formatWhatsAppReceipt({
+        orderId: newOrderId,
+        orderNumber: newOrderId.replace(/^ord-/, "").split("-")[0] || "101",
+        customerName,
+        customerPhone: phone,
+        items: items.map((i) => ({ name: i.name, price: i.price, quantity: i.quantity })),
+        totalAmount: finalTotal,
+        vanLocationName: vanLocation.spotName,
+        paymentId: "Pay at Outlet",
+        pickupType,
+        vehicleInfo,
+        createdAt: Date.now(),
+      });
+      const waUrl = getWhatsAppReceiptUrl(phone, receiptText);
 
-        const orderData = await orderRes.json();
+      setDigitalReceiptUrl(waUrl);
+      setPaymentId("Pay Upon Collection");
+      setConfirmedOrderId(newOrderId);
+      setOrderConfirmed(true);
+      setIsPlacingOrder(false);
 
-        // 2. Open Razorpay Checkout modal (UPI / GPay / PhonePe / Cards)
-        await openRazorpayCheckout({
-          keyId: orderData.keyId,
-          orderId: orderData.orderId,
-          amount: orderData.amount,
-          customerName,
-          customerPhone: phone,
-          customerEmail: user?.email || "guest@brew.cafe",
-          isLive: Boolean(orderData.isLive),
-          onSuccess: async (rzpResponse) => {
-            // Verify payment signature
-            await fetch("/api/payments/verify", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(rzpResponse),
-            });
+      analytics.trackOrderCompleted({
+        id: newOrderId,
+        totalAmount: finalTotal,
+        pickupType,
+        itemCount: totalItems,
+      });
 
-            // Create order with verified payment
-            const newOrderId = createOrder({
-              customerName,
-              customerPhone: phone,
-              items: [...items],
-              notes: baristaNotes,
-              totalAmount: finalTotal,
-              pickupType,
-              vehicleInfo: pickupType === "curbside" ? vehicleInfo : undefined,
-              vanLocationName: vanLocation.spotName,
-              paymentStatus: "paid",
-              paymentId: rzpResponse.razorpay_payment_id,
-              paymentMethod: "Razorpay (UPI / Cards)",
-            });
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ["#DFAB6C", "#C88C50", "#F4EFE6", "#FFFFFF"],
+      });
 
-            // Format WhatsApp digital receipt
-            const receiptText = formatWhatsAppReceipt({
-              orderId: newOrderId,
-              orderNumber: newOrderId.replace(/^ord-/, "").split("-")[0] || "101",
-              customerName,
-              customerPhone: phone,
-              items: items.map((i) => ({ name: i.name, price: i.price, quantity: i.quantity })),
-              totalAmount: finalTotal,
-              vanLocationName: vanLocation.spotName,
-              paymentId: rzpResponse.razorpay_payment_id,
-              pickupType,
-              vehicleInfo,
-              createdAt: Date.now(),
-            });
-            const waUrl = getWhatsAppReceiptUrl(phone, receiptText);
-
-            setDigitalReceiptUrl(waUrl);
-            setPaymentId(rzpResponse.razorpay_payment_id);
-            setConfirmedOrderId(newOrderId);
-            setOrderConfirmed(true);
-            setIsPlacingOrder(false);
-
-            analytics.trackOrderCompleted({
-              id: newOrderId,
-              totalAmount: finalTotal,
-              pickupType,
-              itemCount: totalItems,
-            });
-
-            confetti({
-              particleCount: 80,
-              spread: 70,
-              origin: { y: 0.6 },
-              colors: ["#DFAB6C", "#C88C50", "#F4EFE6", "#FFFFFF"],
-            });
-
-            clearCart();
-          },
-          onDismiss: () => {
-            setIsPlacingOrder(false);
-          },
-          onError: () => {
-            setIsPlacingOrder(false);
-            setPaymentError("Payment was cancelled or failed. Please try again.");
-          },
-        });
-      } else {
-        // Counter payment
-        const newOrderId = createOrder({
-          customerName,
-          customerPhone: phone,
-          items: [...items],
-          notes: baristaNotes,
-          totalAmount: finalTotal,
-          pickupType,
-          vehicleInfo: pickupType === "curbside" ? vehicleInfo : undefined,
-          vanLocationName: vanLocation.spotName,
-          paymentStatus: "pending",
-          paymentMethod: "Pay at Van Counter",
-        });
-
-        const receiptText = formatWhatsAppReceipt({
-          orderId: newOrderId,
-          orderNumber: newOrderId.replace(/^ord-/, "").split("-")[0] || "101",
-          customerName,
-          customerPhone: phone,
-          items: items.map((i) => ({ name: i.name, price: i.price, quantity: i.quantity })),
-          totalAmount: finalTotal,
-          vanLocationName: vanLocation.spotName,
-          paymentId: "Counter Payment",
-          pickupType,
-          vehicleInfo,
-          createdAt: Date.now(),
-        });
-        const waUrl = getWhatsAppReceiptUrl(phone, receiptText);
-
-        setDigitalReceiptUrl(waUrl);
-        setPaymentId("Pay Upon Pickup");
-        setConfirmedOrderId(newOrderId);
-        setOrderConfirmed(true);
-        setIsPlacingOrder(false);
-
-        analytics.trackOrderCompleted({
-          id: newOrderId,
-          totalAmount: finalTotal,
-          pickupType,
-          itemCount: totalItems,
-        });
-
-        confetti({
-          particleCount: 80,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ["#DFAB6C", "#C88C50", "#F4EFE6", "#FFFFFF"],
-        });
-
-        clearCart();
-      }
+      clearCart();
     } catch (err: unknown) {
       setIsPlacingOrder(false);
-      const msg = err instanceof Error ? err.message : "Payment processing failed";
+      const msg = err instanceof Error ? err.message : "Failed to place order. Please try again.";
       setPaymentError(msg);
     }
   };
@@ -575,57 +471,23 @@ export default function CartPage() {
                 </p>
               </div>
 
-              {/* Payment Method Selector */}
-              <div className="p-5 rounded-3xl bg-[#24170F]/50 backdrop-blur-md border border-white/10 mt-4">
-                <label className="block text-xs uppercase tracking-wider font-semibold text-[#8C7C70] mb-3">
-                  Select Payment Method
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod("razorpay")}
-                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      paymentMethod === "razorpay"
-                        ? "bg-[#DFAB6C]/15 border-[#DFAB6C] text-white shadow-md"
-                        : "bg-black/30 border-white/5 text-[#8C7C70] hover:border-white/20"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="font-bold text-xs text-white flex items-center gap-1.5">
-                        <Smartphone className="w-4 h-4 text-[#DFAB6C]" />
-                        <span>UPI & Cards (Razorpay)</span>
+              {/* Payment Method Display */}
+              <div className="p-5 rounded-3xl bg-[#24170F]/50 backdrop-blur-md border border-[#DFAB6C]/30 mt-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-[#DFAB6C]/15 border border-[#DFAB6C]/30 flex items-center justify-center text-[#DFAB6C] shrink-0 mt-0.5">
+                    <Store className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm text-white">Pay at Outlet / Van Counter</span>
+                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-[#DFAB6C]/20 border border-[#DFAB6C]/30 text-[#DFAB6C] font-semibold tracking-wide uppercase">
+                        Active
                       </span>
-                      {paymentMethod === "razorpay" && (
-                        <span className="w-2 h-2 rounded-full bg-[#DFAB6C]" />
-                      )}
                     </div>
-                    <p className="text-[10px] text-[#C4B4A8]">
-                      Google Pay, PhonePe, Paytm, Cards, NetBanking
+                    <p className="text-xs text-[#A89F91] mt-1 leading-relaxed">
+                      Pay via UPI QR, Cash, or Card upon collection at the mobile van. No advance online payment required.
                     </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod("counter")}
-                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      paymentMethod === "counter"
-                        ? "bg-[#DFAB6C]/15 border-[#DFAB6C] text-white shadow-md"
-                        : "bg-black/30 border-white/5 text-[#8C7C70] hover:border-white/20"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="font-bold text-xs text-white flex items-center gap-1.5">
-                        <CreditCard className="w-4 h-4 text-[#DFAB6C]" />
-                        <span>Pay at Van Counter</span>
-                      </span>
-                      {paymentMethod === "counter" && (
-                        <span className="w-2 h-2 rounded-full bg-[#DFAB6C]" />
-                      )}
-                    </div>
-                    <p className="text-[10px] text-[#C4B4A8]">
-                      Pay cash or tap card at mobile van pickup
-                    </p>
-                  </button>
+                  </div>
                 </div>
               </div>
 
@@ -785,14 +647,12 @@ export default function CartPage() {
                   {isPlacingOrder ? (
                     <>
                       <div className="w-4 h-4 border-2 border-[#1A110B] border-t-transparent rounded-full animate-spin" />
-                      <span>Processing Payment & Brewing...</span>
+                      <span>Placing Order & Sending to Van KDS...</span>
                     </>
                   ) : (
                     <>
                       <span>
-                        {paymentMethod === "razorpay"
-                          ? `Pay ₹${finalTotal.toLocaleString("en-IN")} via UPI / Cards`
-                          : `Place Order & Pay at Van (₹${finalTotal.toLocaleString("en-IN")})`}
+                        Place Order & Pay at Outlet (₹{finalTotal.toLocaleString("en-IN")})
                       </span>
                       <ChevronRight className="w-4 h-4" />
                     </>
@@ -802,7 +662,7 @@ export default function CartPage() {
                 {/* Security Badge */}
                 <div className="flex items-center justify-center gap-1.5 text-[11px] text-[#8C7C70] mt-4">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>256-bit Encrypted Checkout • Verified by Razorpay</span>
+                  <span>Instant Token & Live KDS Sync • Verified by BREW</span>
                 </div>
               </div>
             </div>
