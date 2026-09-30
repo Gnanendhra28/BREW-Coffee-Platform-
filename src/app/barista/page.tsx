@@ -30,6 +30,8 @@ import {
   Shield,
   Package,
   X,
+  HeartHandshake,
+  ShieldAlert,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
@@ -47,6 +49,12 @@ import {
   evaluateIngredientStockout,
   calculateInventoryHealthScore,
   tool_create_restock_request,
+  estimateOrderPreparation,
+  calculateCurbsideUrgency,
+  calculateQueuePriorityScore,
+  getYieldOptimizerStatus,
+  processEventInquiry,
+  ConciergeInquiryResult,
 } from "@/lib/smartAgentsEngine";
 
 export default function BaristaKDSPage() {
@@ -100,6 +108,58 @@ export default function BaristaKDSPage() {
   });
   const [isSentinelDrawerOpen, setIsSentinelDrawerOpen] = useState(false);
   const [quickRestockToast, setQuickRestockToast] = useState<string | null>(null);
+  const [eventInquiryInput, setEventInquiryInput] = useState(
+    "Corporate tech conference for 120 guests next Friday in DLF Cybercity from 10 AM to 2 PM"
+  );
+  const [conciergeQuoteResult, setConciergeQuoteResult] = useState<ConciergeInquiryResult | null>(null);
+  const [quoteSentToast, setQuoteSentToast] = useState(false);
+  const [recoveryQueue, setRecoveryQueue] = useState<Array<{
+    id: string;
+    feedbackId: string;
+    customerName: string;
+    rating: number;
+    issue: string;
+    orderNumber: string;
+    rootCause: string;
+    voucherAmount: number;
+    status: "pending" | "approved" | "escalated";
+    isCritical?: boolean;
+  }>>([
+    {
+      id: "rec-1042",
+      feedbackId: "REV-1042",
+      customerName: "Siddharth Rao",
+      rating: 3,
+      issue: "Wait Time (18 min wait)",
+      orderNumber: "#ORD-1821",
+      rootCause: "Likely (Peak rush preparation delay)",
+      voucherAmount: 100,
+      status: "pending",
+    },
+    {
+      id: "rec-1043",
+      feedbackId: "REV-1043",
+      customerName: "Kavya Menon",
+      rating: 2,
+      issue: "Missing Croissant",
+      orderNumber: "#ORD-1825",
+      rootCause: "Confirmed (Billed but not packed)",
+      voucherAmount: 75,
+      status: "approved",
+    },
+    {
+      id: "rec-1044",
+      feedbackId: "REV-1044",
+      customerName: "Anonymous Guest",
+      rating: 1,
+      issue: "Severe Milk Allergy Reaction",
+      orderNumber: "#ORD-1804",
+      rootCause: "Escalated for immediate senior review",
+      voucherAmount: 0,
+      status: "escalated",
+      isCritical: true,
+    },
+  ]);
 
   const handleQuickRestock = (patch: Partial<typeof inventory>, label: string) => {
     restockInventory(patch);
@@ -577,32 +637,94 @@ export default function BaristaKDSPage() {
                                 </p>
                               )}
 
-                              {/* Curbside Drive-Thru Expediter Live Pulse (Agent #2) */}
-                              {order.pickupType === "curbside" && curbsideArrivals[order.id] === "arrived" && (
-                                <div className="mt-2 p-2 rounded-xl bg-emerald-500/20 border border-emerald-500/60 text-emerald-200 text-xs font-bold flex items-center gap-2 animate-pulse shadow-md">
-                                  <span className="relative flex h-2.5 w-2.5 shrink-0">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                                  </span>
-                                  <div>
-                                    <span className="text-[10px] text-emerald-300 uppercase tracking-wider block">🚨 Vehicle at Curb!</span>
-                                    <span className="text-[11px] text-white">Deliver to vehicle window now</span>
-                                  </div>
-                                </div>
-                              )}
+                              {/* Curbside Drive-Thru Expediter Live Pulse & Intelligence (Agent #2) */}
+                              {order.pickupType === "curbside" && (() => {
+                                const isArrived = curbsideArrivals[order.id] === "arrived";
+                                const isApproaching = curbsideArrivals[order.id] === "approaching";
+                                const etaSeconds = isArrived ? 0 : isApproaching ? 120 : 300;
+                                const prep = estimateOrderPreparation(order.id, order.items, order.createdAt, order.status);
+                                const urgency = calculateCurbsideUrgency(etaSeconds, prep.remainingPrepSeconds, prep.isReady);
+                                const priorityScore = calculateQueuePriorityScore(
+                                  urgency.urgencyLevel,
+                                  urgency.arrivalBufferSeconds,
+                                  prep.elapsedPrepSeconds,
+                                  true
+                                );
 
-                              {order.pickupType === "curbside" && curbsideArrivals[order.id] === "approaching" && (
-                                <div className="mt-2 p-2 rounded-xl bg-amber-500/20 border border-amber-500/50 text-amber-200 text-xs font-semibold flex items-center gap-2 animate-pulse">
-                                  <span className="relative flex h-2.5 w-2.5 shrink-0">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-                                  </span>
-                                  <div>
-                                    <span className="text-[10px] text-amber-300 uppercase tracking-wider block">⚡ Approaching (~2m ETA)</span>
-                                    <span className="text-[11px] text-amber-100">Sync extraction for 60s handover</span>
+                                const formatSec = (sec: number) => {
+                                  if (sec <= 0) return "0s";
+                                  const m = Math.floor(sec / 60);
+                                  const s = sec % 60;
+                                  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+                                };
+
+                                return (
+                                  <div className="mt-2.5 p-3 rounded-2xl bg-black/40 border border-white/10 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 flex items-center gap-1.5 font-mono">
+                                        <Car className="w-3.5 h-3.5 text-blue-400" />
+                                        <span>🚗 Curbside Expediter</span>
+                                      </span>
+                                      <span
+                                        className={`px-2 py-0.5 rounded font-mono font-bold text-[10px] uppercase ${
+                                          urgency.urgencyLevel === "CRITICAL"
+                                            ? "bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse"
+                                            : urgency.urgencyLevel === "URGENT"
+                                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                            : urgency.urgencyLevel === "WATCH"
+                                            ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30"
+                                            : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                        }`}
+                                      >
+                                        {urgency.urgencyLevel === "CRITICAL"
+                                          ? "🔴 CRITICAL"
+                                          : urgency.urgencyLevel === "URGENT"
+                                          ? "🟠 URGENT"
+                                          : urgency.urgencyLevel === "WATCH"
+                                          ? "🟡 WATCH"
+                                          : "🟢 NORMAL"}
+                                      </span>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-2 text-[10px] font-mono">
+                                      <div className="bg-white/5 p-1.5 rounded-lg">
+                                        <span className="text-[#8C7C70] block">Vehicle ETA</span>
+                                        <span className="font-bold text-white">
+                                          {isArrived ? "At Curb (0s)" : formatSec(etaSeconds)}
+                                        </span>
+                                      </div>
+                                      <div className="bg-white/5 p-1.5 rounded-lg">
+                                        <span className="text-[#8C7C70] block">Prep Remaining</span>
+                                        <span className="font-bold text-white">
+                                          {prep.isReady ? "Ready ✓" : formatSec(prep.remainingPrepSeconds)}
+                                        </span>
+                                      </div>
+                                      <div className="bg-white/5 p-1.5 rounded-lg">
+                                        <span className="text-[#8C7C70] block">Priority</span>
+                                        <span className="font-bold text-amber-300">{priorityScore}/100</span>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between text-[10px] text-[#A8988B] pt-0.5 font-mono">
+                                      <span>
+                                        Target Ready:{" "}
+                                        <strong className="text-white">
+                                          {new Date(prep.targetReadyTimestamp).toLocaleTimeString([], {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}
+                                        </strong>
+                                      </span>
+                                      {urgency.recommendedAction === "EXPEDITE" && (
+                                        <span className="text-amber-400 font-bold flex items-center gap-1">
+                                          <Zap className="w-3 h-3 text-amber-400" />
+                                          <span>Accelerate Prep</span>
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
+                                );
+                              })()}
                             </div>
 
                             <div className="flex flex-col items-end gap-1.5">
@@ -896,16 +1018,63 @@ export default function BaristaKDSPage() {
                             )}
                           </div>
 
-                          {/* Vehicle Details Pill */}
-                          <div className="my-3 p-3 rounded-2xl bg-black/40 border border-white/5 space-y-1">
-                            <span className="text-[10px] uppercase font-bold text-blue-400 tracking-wider flex items-center gap-1">
-                              <Car className="w-3 h-3 text-blue-400" />
-                              <span>Vehicle Identification</span>
-                            </span>
-                            <p className="text-xs font-mono font-bold text-white">
-                              {order.vehicleInfo || "Curbside Van Window Bay"}
-                            </p>
-                          </div>
+                          {/* Vehicle Details Pill & Expediter Intelligence */}
+                          {(() => {
+                            const etaSeconds = isArrived ? 0 : isApproaching ? 120 : 300;
+                            const prep = estimateOrderPreparation(order.id, order.items, order.createdAt, order.status);
+                            const urgency = calculateCurbsideUrgency(etaSeconds, prep.remainingPrepSeconds, prep.isReady);
+                            const priorityScore = calculateQueuePriorityScore(
+                              urgency.urgencyLevel,
+                              urgency.arrivalBufferSeconds,
+                              prep.elapsedPrepSeconds,
+                              true
+                            );
+                            const formatSec = (sec: number) => {
+                              if (sec <= 0) return "0s";
+                              const m = Math.floor(sec / 60);
+                              const s = sec % 60;
+                              return m > 0 ? `${m}m ${s}s` : `${s}s`;
+                            };
+
+                            return (
+                              <div className="my-3 p-3 rounded-2xl bg-black/40 border border-white/5 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] uppercase font-bold text-blue-400 tracking-wider flex items-center gap-1 font-mono">
+                                    <Car className="w-3 h-3 text-blue-400" />
+                                    <span>{order.vehicleInfo || "Curbside Van Window Bay"}</span>
+                                  </span>
+                                  <span
+                                    className={`px-2 py-0.5 rounded font-mono font-bold text-[9px] uppercase ${
+                                      urgency.urgencyLevel === "CRITICAL"
+                                        ? "bg-red-500/20 text-red-300 border border-red-500/40"
+                                        : urgency.urgencyLevel === "URGENT"
+                                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                        : urgency.urgencyLevel === "WATCH"
+                                        ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30"
+                                        : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                    }`}
+                                  >
+                                    {urgency.urgencyLevel}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-2 text-[10px] font-mono">
+                                  <div className="bg-white/5 p-1 rounded">
+                                    <span className="text-[#8C7C70] block">ETA</span>
+                                    <span className="font-bold text-white">{isArrived ? "0s (At Curb)" : formatSec(etaSeconds)}</span>
+                                  </div>
+                                  <div className="bg-white/5 p-1 rounded">
+                                    <span className="text-[#8C7C70] block">Prep Rem</span>
+                                    <span className="font-bold text-white">{prep.isReady ? "0s (Ready)" : formatSec(prep.remainingPrepSeconds)}</span>
+                                  </div>
+                                  <div className="bg-white/5 p-1 rounded">
+                                    <span className="text-[#8C7C70] block">Priority</span>
+                                    <span className="font-bold text-amber-300">{priorityScore}/100</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
 
                           {/* Live Barista Action Guidance */}
                           {isArrived ? (
@@ -1970,6 +2139,75 @@ export default function BaristaKDSPage() {
                 </div>
               </div>
 
+              {/* Production Pastry Spoilage Audit & Margin Engine */}
+              {(() => {
+                const yieldStatus = getYieldOptimizerStatus();
+                return (
+                  <div className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300 font-mono">
+                          ⚡ Real-Time Pastry Spoilage Audit &amp; Margin Guard
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-white/5 text-[#8C7C70] border border-white/10">
+                          {yieldStatus.remainingOperatingHours}h until closing ({yieldStatus.storeHours})
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold text-emerald-400">
+                        Zero Waste Target Active
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs font-mono">
+                        <thead>
+                          <tr className="border-b border-white/5 text-[10px] text-[#8C7C70] uppercase">
+                            <th className="pb-2 font-semibold">Pastry Item</th>
+                            <th className="pb-2 font-semibold text-center">Available</th>
+                            <th className="pb-2 font-semibold text-center">Natural Sales</th>
+                            <th className="pb-2 font-semibold text-center">Surplus Risk</th>
+                            <th className="pb-2 font-semibold text-right">Potential Loss</th>
+                            <th className="pb-2 font-semibold text-right">Risk Tier</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {yieldStatus.assessments.map((a) => (
+                            <tr key={a.productId} className="text-white hover:bg-white/[0.02]">
+                              <td className="py-2.5 font-bold">{a.productName}</td>
+                              <td className="py-2.5 text-center text-[#C4B4A8]">{a.currentStock} pcs</td>
+                              <td className="py-2.5 text-center text-[#8C7C70]">~{a.expectedNaturalSales} pcs</td>
+                              <td className="py-2.5 text-center">
+                                <span className={a.expectedSurplus > 0 ? "text-amber-400 font-bold" : "text-emerald-400"}>
+                                  {a.expectedSurplus} pcs
+                                </span>
+                              </td>
+                              <td className="py-2.5 text-right font-bold text-amber-300">
+                                {a.projectedWasteCost > 0 ? `₹${a.projectedWasteCost}` : "₹0"}
+                              </td>
+                              <td className="py-2.5 text-right">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                    a.wasteRiskLevel === "CRITICAL"
+                                      ? "bg-red-500/20 text-red-300 border border-red-500/40"
+                                      : a.wasteRiskLevel === "HIGH"
+                                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                      : a.wasteRiskLevel === "MEDIUM"
+                                      ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30"
+                                      : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                  }`}
+                                >
+                                  {a.wasteRiskLevel}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Live Customer Top Banner Preview */}
               <div className="p-4 rounded-2xl bg-black/40 border border-white/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="space-y-1">
@@ -1994,6 +2232,171 @@ export default function BaristaKDSPage() {
                   </span>
                 </div>
               </div>
+            </div>
+
+            {/* AGENT #4: EVENT BOOKING CONCIERGE */}
+            <div className="p-6 rounded-3xl bg-[#22160F] border border-amber-500/30 shadow-xl space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2 rounded-xl bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                    <Calendar className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h2 className="text-base font-bold text-white uppercase tracking-wider font-sans">
+                      Agent #4: Event Booking Concierge
+                    </h2>
+                    <p className="text-xs text-[#8C7C70]">
+                      Transforms customer catering inquiries into transparent 3-tier quotations with staffing &amp; margin validation.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] px-2.5 py-1 rounded-full font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    ● Margin Guard &ge; 30% Active
+                  </span>
+                </div>
+              </div>
+
+              {/* Inquiry Input Form */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-[#8C7C70] flex items-center justify-between">
+                  <span>Customer Event Inquiry:</span>
+                  <span className="text-[10px] font-mono text-[#DFAB6C]">Natural Language AI Parser</span>
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={eventInquiryInput}
+                    onChange={(e) => setEventInquiryInput(e.target.value)}
+                    placeholder="e.g. Corporate event for 150 guests next Friday in DLF Cybercity..."
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-[#8C7C70] focus:outline-none focus:border-amber-400 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const res = processEventInquiry(eventInquiryInput);
+                      setConciergeQuoteResult(res);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-[#DFAB6C] hover:bg-white text-[#1A110B] text-xs font-bold transition-all cursor-pointer shrink-0 shadow-md"
+                  >
+                    ⚡ Calculate 3-Tier Quote
+                  </button>
+                </div>
+              </div>
+
+              {/* Dynamic 3-Tier Quotation Display */}
+              {(() => {
+                const quoteRes = conciergeQuoteResult || processEventInquiry(eventInquiryInput);
+                const quote = quoteRes.quote;
+
+                if (!quote) {
+                  return (
+                    <div className="p-4 rounded-2xl bg-black/40 border border-amber-500/20 text-xs text-amber-300">
+                      ℹ️ {quoteRes.customerSummaryMessage}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-4">
+                    {/* Event Telemetry Summary */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                      <div className="p-2.5 rounded-xl bg-black/30 border border-white/5">
+                        <span className="text-[10px] text-[#8C7C70] block">Host &amp; Venue</span>
+                        <span className="font-bold text-white truncate block">{quote.organization}</span>
+                        <span className="text-[10px] text-[#A8988B] truncate block">{quote.location}</span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-black/30 border border-white/5">
+                        <span className="text-[10px] text-[#8C7C70] block">Attendees</span>
+                        <span className="font-bold text-amber-300">{quote.guestCount} Guests</span>
+                        <span className="text-[10px] text-[#8C7C70] block">{quote.eventType}</span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-black/30 border border-white/5">
+                        <span className="text-[10px] text-[#8C7C70] block">Service Window</span>
+                        <span className="font-bold text-white">{quote.durationMinutes / 60} Hours</span>
+                        <span className="text-[10px] text-[#8C7C70] block">{quote.startTime} - {quote.endTime}</span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-black/30 border border-white/5">
+                        <span className="text-[10px] text-[#8C7C70] block">Travel &amp; Logistics</span>
+                        <span className="font-bold text-emerald-400">~{quote.logistics.distanceKm} km</span>
+                        <span className="text-[10px] text-[#8C7C70] block">Fee: ₹{quote.logistics.totalLogisticsCost}</span>
+                      </div>
+                    </div>
+
+                    {/* 3-Tier Package Comparison Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {quote.tiers.map((tier) => (
+                        <div
+                          key={tier.tierId}
+                          className={`p-3.5 rounded-2xl border flex flex-col justify-between space-y-3 transition-all ${
+                            tier.isRecommended
+                              ? "bg-amber-500/10 border-amber-400/60 ring-1 ring-amber-400/40 shadow-lg"
+                              : "bg-black/40 border-white/5 text-[#C4B4A8]"
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-bold text-white uppercase tracking-wider">
+                                {tier.name}
+                              </span>
+                              {tier.isRecommended && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                  ★ Recommended
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-baseline gap-1.5 my-2">
+                              <span className="text-xl font-extrabold text-[#DFAB6C] font-mono">
+                                ₹{tier.totalAmount.toLocaleString("en-IN")}
+                              </span>
+                              <span className="text-[11px] text-[#8C7C70] font-mono">
+                                (₹{tier.pricePerGuest}/guest)
+                              </span>
+                            </div>
+                            <ul className="text-[11px] text-[#A8988B] space-y-1 my-2">
+                              {tier.perks.slice(0, 3).map((perk: string, pIdx: number) => (
+                                <li key={pIdx} className="flex items-start gap-1.5">
+                                  <span className="text-amber-400 text-xs">✓</span>
+                                  <span className="line-clamp-1">{perk}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[10px] font-mono">
+                            <span className="text-[#8C7C70]">Margin:</span>
+                            <span className="text-emerald-400 font-bold">{tier.grossMarginPercent}% Gross</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Operational Manifest Checklist */}
+                    <div className="p-3.5 rounded-2xl bg-black/40 border border-white/5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+                      <div className="flex flex-wrap items-center gap-4 text-[11px]">
+                        <span className="text-[#8C7C70]">Manifest:</span>
+                        <span className="text-white">☕ {quote.consumption.coffeeBeansKg}kg Beans</span>
+                        <span className="text-white">🥛 {quote.consumption.milkLiters}L Milk</span>
+                        <span className="text-white">🥤 {quote.consumption.cupsCount} Cups</span>
+                        <span className="text-white">🥐 {quote.consumption.pastriesCount} Pastries</span>
+                        <span className="text-white">👨‍🍳 {quote.staffing.baristasAssigned} Baristas</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuoteSentToast(true);
+                          setTimeout(() => setQuoteSentToast(false), 3000);
+                        }}
+                        className="px-4 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-white border border-emerald-500/30 text-xs font-bold transition-all cursor-pointer shrink-0"
+                      >
+                        {quoteSentToast ? "✓ Formal Quotation Dispatched!" : "Dispatch Quotation"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* AGENT #5: HYPER-LOCAL HYPE BROADCASTER */}
@@ -2154,6 +2557,175 @@ export default function BaristaKDSPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* AGENT #6: GUEST SENTIMENT GUARDIAN */}
+            <div className="p-6 rounded-3xl bg-[#22160F] border border-rose-500/30 shadow-xl space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2 rounded-xl bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                    <HeartHandshake className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h2 className="text-base font-bold text-white uppercase tracking-wider font-sans">
+                      Agent #6: Guest Sentiment Guardian
+                    </h2>
+                    <p className="text-xs text-[#8C7C70]">
+                      Real-time reputation recovery, root-cause operational correlation, and controlled compensation governance.
+                    </p>
+                  </div>
+                </div>
+
+                <span className="text-[11px] font-mono text-rose-300 bg-rose-950/40 px-2.5 py-1 rounded-lg border border-rose-500/30 flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-rose-400" />
+                  Policy Guard: Active
+                </span>
+              </div>
+
+              {/* Today's Feedback & Sentiment Distribution */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="p-3.5 rounded-2xl bg-black/40 border border-white/5 flex flex-col justify-between">
+                  <span className="text-[10px] font-bold text-[#8C7C70] uppercase tracking-wider">
+                    Today&apos;s Sentiment Pulse
+                  </span>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="text-2xl font-black text-amber-400 flex items-center gap-1">
+                      ⭐ 4.2
+                    </span>
+                    <span className="text-xs text-[#C4B4A8]">/ 5.0 Average</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2 text-[11px] text-[#8C7C70] font-mono">
+                    <span className="text-emerald-400">5★ (18)</span>
+                    <span className="text-blue-400">4★ (8)</span>
+                    <span className="text-amber-400">3★ (7)</span>
+                    <span className="text-orange-400">2★ (2)</span>
+                    <span className="text-rose-400">1★ (1)</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-black/40 border border-white/5 flex flex-col justify-between">
+                  <span className="text-[10px] font-bold text-[#8C7C70] uppercase tracking-wider">
+                    Top Operational Bottlenecks
+                  </span>
+                  <div className="space-y-1.5 mt-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[#C4B4A8] flex items-center gap-1.5">⏱️ Wait Time Rush</span>
+                      <span className="font-mono font-bold text-amber-300">6 cases</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[#C4B4A8] flex items-center gap-1.5">📦 Missing Bakery Item</span>
+                      <span className="font-mono font-bold text-amber-300">3 cases</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[#C4B4A8] flex items-center gap-1.5">☕ Drink Sweetness / Temp</span>
+                      <span className="font-mono font-bold text-amber-300">2 cases</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-black/40 border border-white/5 flex flex-col justify-between">
+                  <span className="text-[10px] font-bold text-[#8C7C70] uppercase tracking-wider">
+                    Safety &amp; Compliance Status
+                  </span>
+                  <div className="mt-1">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-rose-400">
+                      <ShieldAlert className="w-4 h-4" />
+                      <span>1 Critical Case Escalated</span>
+                    </div>
+                    <p className="text-[11px] text-[#8C7C70] mt-1">
+                      Automated vouchers blocked for safety claims. Escalated directly to store manager.
+                    </p>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-white/5 text-[10px] text-[#8C7C70] font-mono">
+                    Zero Hallucination Compensation
+                  </div>
+                </div>
+              </div>
+
+              {/* Recovery Queue */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
+                    <span>Active Recovery Queue</span>
+                    <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 text-[10px]">
+                      {recoveryQueue.length} Active
+                    </span>
+                  </h3>
+                  <span className="text-[11px] text-[#8C7C70]">
+                    Eligible 1-3 star customer experiences
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  {recoveryQueue.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`p-4 rounded-2xl border transition-all ${
+                        item.isCritical
+                          ? "bg-rose-950/20 border-rose-500/40"
+                          : item.status === "approved"
+                          ? "bg-emerald-950/15 border-emerald-500/30"
+                          : "bg-black/40 border-white/5 hover:border-white/15"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-bold text-white">#{item.feedbackId}</span>
+                            <span className="text-xs text-amber-400 font-bold">
+                              {"⭐".repeat(item.rating)} ({item.rating}/5)
+                            </span>
+                            <span className="text-xs text-[#8C7C70]">• {item.customerName}</span>
+                            <span className="text-xs text-[#DFAB6C] font-mono">{item.orderNumber}</span>
+                          </div>
+
+                          <div className="text-xs text-[#C4B4A8]">
+                            <strong className="text-white">Issue:</strong> {item.issue}
+                          </div>
+
+                          <div className="text-[11px] text-[#8C7C70]">
+                            <strong>Root Cause:</strong> {item.rootCause}
+                          </div>
+
+                          {item.voucherAmount > 0 && (
+                            <div className="text-xs text-emerald-400 font-mono font-semibold pt-0.5">
+                              Recommended Recovery: ₹{item.voucherAmount} Voucher (BREWCARE)
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {item.isCritical ? (
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[11px] font-bold flex items-center gap-1">
+                                <ShieldAlert className="w-3.5 h-3.5" />
+                                Escalated to Manager
+                              </span>
+                            </div>
+                          ) : item.status === "approved" ? (
+                            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Approved &amp; Issued
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRecoveryQueue((prev) =>
+                                  prev.map((q) => (q.id === item.id ? { ...q, status: "approved" } : q))
+                                );
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#DFAB6C] to-[#C99252] hover:from-[#EDC188] hover:to-[#DFAB6C] text-[#140D08] text-xs font-bold shadow-md cursor-pointer transition-all"
+                            >
+                              Approve ₹{item.voucherAmount} Voucher
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 

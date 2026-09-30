@@ -203,6 +203,11 @@ export function analyzeStockDepletion(stock: InventoryStock): DepletionAlert[] {
 }
 
 export * from "./inventorySentinel";
+export * from "./curbsideExpediter";
+export * from "./yieldOptimizer";
+export * from "./eventBookingConcierge";
+export * from "./hyperLocalHype";
+export * from "./guestSentimentGuardian";
 
 import { FlashDealSchema, EventQuotationSchema, SocialBroadcastArraySchema, ReviewRecoveryNoticeSchema } from "./agentSchemas";
 
