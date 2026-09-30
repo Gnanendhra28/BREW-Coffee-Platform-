@@ -394,11 +394,16 @@ export const VanProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const restockInventory = (patch?: Partial<InventoryStock>) => {
-    const next = {
-      ...DEFAULT_INVENTORY_STOCK,
-      ...patch,
-      lastRestockedAt: Date.now(),
-    };
+    const next = patch
+      ? {
+          ...inventory,
+          ...patch,
+          lastRestockedAt: Date.now(),
+        }
+      : {
+          ...DEFAULT_INVENTORY_STOCK,
+          lastRestockedAt: Date.now(),
+        };
     setInventory(next);
     dispatchCloudInventory(next);
   };

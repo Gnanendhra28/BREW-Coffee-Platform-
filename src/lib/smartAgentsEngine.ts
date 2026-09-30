@@ -114,7 +114,7 @@ export function deductOrderIngredients(
       name.includes("affogato") ||
       name.includes("mocha")
     ) {
-      updated.coffeeBeansKg = Math.max(0, Number((updated.coffeeBeansKg - 0.018 * qty).toFixed(2)));
+      updated.coffeeBeansKg = Math.max(0, Number((updated.coffeeBeansKg - 0.018 * qty).toFixed(3)));
     }
 
     // Milk (approx 0.18L per milk coffee / shake)
@@ -151,43 +151,43 @@ export function deductOrderIngredients(
 export function analyzeStockDepletion(stock: InventoryStock): DepletionAlert[] {
   const alerts: DepletionAlert[] = [];
 
-  // Paper cups threshold
+  // Paper cups threshold (Warning <= 25, Critical <= 15)
   if (stock.paperCups <= 25) {
     alerts.push({
       ingredient: "Artisanal Paper Cups",
       currentStock: `${stock.paperCups} cups remaining`,
       burnRatePerHour: "~18 cups/hr",
-      predictedDepletionTime: "Depleted in ~1.2 hrs",
+      predictedDepletionTime: stock.paperCups <= 15 ? "Depleted in ~45 mins" : "Depleted in ~1.2 hrs",
       severity: stock.paperCups <= 15 ? "critical" : "warning",
-      recommendation: "Immediate restock required from mobile storage bay or prompt guests for reusable cup discount.",
+      recommendation: "Prompt guests for reusable cup discount or fetch from mobile storage bay.",
     });
   }
 
-  // Whole milk threshold
+  // Whole milk threshold (Warning <= 5.0, Critical <= 3.0)
   if (stock.wholeMilkLiters <= 5.0) {
     alerts.push({
       ingredient: "Farm Fresh Whole Milk",
       currentStock: `${stock.wholeMilkLiters} L remaining`,
-      burnRatePerHour: "~3.2 L/hr",
-      predictedDepletionTime: "Depleted in ~1.5 hrs",
+      burnRatePerHour: "~3.2 Liters/hr",
+      predictedDepletionTime: stock.wholeMilkLiters <= 3.0 ? "Depleted in ~45 mins" : "Depleted in ~1.5 hrs",
       severity: stock.wholeMilkLiters <= 3.0 ? "critical" : "warning",
       recommendation: "Procure 4 additional cartons or suggest Oat Milk / Americano alternatives.",
     });
   }
 
-  // Coffee beans threshold
+  // Coffee beans threshold (Warning <= 2.0, Critical <= 1.0)
   if (stock.coffeeBeansKg <= 2.0) {
     alerts.push({
       ingredient: "Single-Origin Coffee Beans",
       currentStock: `${stock.coffeeBeansKg} kg remaining`,
       burnRatePerHour: "~0.75 kg/hr",
-      predictedDepletionTime: "Depleted in ~2.5 hrs",
+      predictedDepletionTime: stock.coffeeBeansKg <= 1.0 ? "Depleted in ~1 hr" : "Depleted in ~2.5 hrs",
       severity: stock.coffeeBeansKg <= 1.0 ? "critical" : "warning",
       recommendation: "Open backup 2.5kg roasted batch bag from rear van vault.",
     });
   }
 
-  // Bakery pastries threshold
+  // Bakery pastries threshold (Warning <= 5)
   if (stock.bakeryPastries <= 5) {
     alerts.push({
       ingredient: "Fresh Baked Goods",
@@ -195,7 +195,7 @@ export function analyzeStockDepletion(stock: InventoryStock): DepletionAlert[] {
       burnRatePerHour: "~4 pcs/hr",
       predictedDepletionTime: "Depleted in ~1 hr",
       severity: "warning",
-      recommendation: "Toggle 86 on low-stock items or trigger final flash bundle.",
+      recommendation: "Toggle 86 (sold-out) on low-stock items or trigger final flash deal bundle.",
     });
   }
 

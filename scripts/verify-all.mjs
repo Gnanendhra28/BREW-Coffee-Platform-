@@ -6,6 +6,7 @@ import http from "node:http";
 
 const testSuites = [
   { name: "Phase 1: Real-Time Cloud Database & SSE", script: "scripts/verify-realtime.mjs" },
+  { name: "Inventory Sentinel: Burn Rate & Stockout Engine", script: "scripts/verify-sentinel.mjs" },
   { name: "Phase 2: Authentication & RBAC Edge Security", script: "scripts/verify-auth.mjs" },
   { name: "Phase 3: Payments Gateway & WhatsApp Receipts", script: "scripts/verify-payments.mjs" },
   { name: "Phase 4: Web Push Notifications & Hardware Buzzer", script: "scripts/verify-buzzer.mjs" },

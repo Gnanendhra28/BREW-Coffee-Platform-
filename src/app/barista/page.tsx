@@ -28,6 +28,8 @@ import {
   Check,
   LogOut,
   Shield,
+  Package,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
@@ -83,6 +85,14 @@ export default function BaristaKDSPage() {
   const [locationSaved, setLocationSaved] = useState(false);
   const [restockedFeedback, setRestockedFeedback] = useState(false);
   const [copiedPlatform, setCopiedPlatform] = useState<string | null>(null);
+  const [isSentinelDrawerOpen, setIsSentinelDrawerOpen] = useState(false);
+  const [quickRestockToast, setQuickRestockToast] = useState<string | null>(null);
+
+  const handleQuickRestock = (patch: Partial<typeof inventory>, label: string) => {
+    restockInventory(patch);
+    setQuickRestockToast(`✓ Added ${label} to van storage!`);
+    setTimeout(() => setQuickRestockToast(null), 2500);
+  };
 
   // Future stops form states
   const [futDate, setFutDate] = useState("");
@@ -324,6 +334,27 @@ export default function BaristaKDSPage() {
             <span>Outdoor Board</span>
             <ExternalLink className="w-3 h-3" />
           </Link>
+
+          {/* Inventory Sentinel Drawer Trigger */}
+          <button
+            onClick={() => setIsSentinelDrawerOpen(true)}
+            className={`relative px-3 py-1.5 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
+              analyzeStockDepletion(inventory).length > 0
+                ? "bg-red-950/70 border-red-500/50 text-red-200 hover:bg-red-900/80 animate-pulse"
+                : "bg-black/30 hover:bg-black/50 border-white/10 text-[#DFAB6C]"
+            }`}
+            title="Open Inventory Sentinel Vault & Depletion Alerts"
+          >
+            <Package className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Sentinel</span>
+            {analyzeStockDepletion(inventory).length > 0 ? (
+              <span className="px-1.5 py-0.2 rounded-full bg-red-500 text-white text-[10px] font-mono font-bold">
+                {analyzeStockDepletion(inventory).length} alert{analyzeStockDepletion(inventory).length > 1 ? "s" : ""}
+              </span>
+            ) : (
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            )}
+          </button>
 
           {/* Staff Shift Identity & Lock KDS */}
           {user && (
@@ -713,22 +744,56 @@ export default function BaristaKDSPage() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    restockInventory();
-                    setRestockedFeedback(true);
-                    setTimeout(() => setRestockedFeedback(false), 2500);
-                  }}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md ${
-                    restockedFeedback
-                      ? "bg-emerald-500 text-stone-950"
-                      : "bg-[#DFAB6C] hover:bg-white text-[#1A110B]"
-                  }`}
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${restockedFeedback ? "animate-spin" : ""}`} />
-                  <span>{restockedFeedback ? "Van Restocked!" : "Quick Restock (+ All Ingredients)"}</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickRestock({ paperCups: inventory.paperCups + 10 }, "+10 Cups")}
+                    className="px-2.5 py-1.5 rounded-lg bg-black/40 hover:bg-white/10 border border-white/10 text-xs font-mono font-bold text-[#DFAB6C] transition-all cursor-pointer"
+                    title="Restock 10 paper cups from van vault"
+                  >
+                    +10 Cups
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickRestock({ wholeMilkLiters: Number((inventory.wholeMilkLiters + 5).toFixed(1)) }, "+5L Milk")}
+                    className="px-2.5 py-1.5 rounded-lg bg-black/40 hover:bg-white/10 border border-white/10 text-xs font-mono font-bold text-[#DFAB6C] transition-all cursor-pointer"
+                    title="Restock 5L whole milk from van vault"
+                  >
+                    +5L Milk
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickRestock({ coffeeBeansKg: Number((inventory.coffeeBeansKg + 5).toFixed(1)) }, "+5kg Beans")}
+                    className="px-2.5 py-1.5 rounded-lg bg-black/40 hover:bg-white/10 border border-white/10 text-xs font-mono font-bold text-[#DFAB6C] transition-all cursor-pointer"
+                    title="Restock 5kg coffee beans from van vault"
+                  >
+                    +5kg Beans
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      restockInventory();
+                      setRestockedFeedback(true);
+                      setTimeout(() => setRestockedFeedback(false), 2500);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md ${
+                      restockedFeedback
+                        ? "bg-emerald-500 text-stone-950"
+                        : "bg-[#DFAB6C] hover:bg-white text-[#1A110B]"
+                    }`}
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${restockedFeedback ? "animate-spin" : ""}`} />
+                    <span>{restockedFeedback ? "Vault Restocked!" : "Restock All"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsSentinelDrawerOpen(true)}
+                    className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-xs text-[#EDE4DA] font-semibold transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <Package className="w-3.5 h-3.5 text-[#DFAB6C]" />
+                    <span>Sentinel Drawer</span>
+                  </button>
+                </div>
               </div>
 
               {/* 6 Ingredient Gauges */}
@@ -1652,6 +1717,23 @@ export default function BaristaKDSPage() {
         </div>
       )}
 
+      {/* Floating Inventory Alert Pill (Visible across tabs when stock is low) */}
+      {analyzeStockDepletion(inventory).length > 0 && !isSentinelDrawerOpen && (
+        <div className="fixed bottom-6 left-6 z-40">
+          <button
+            onClick={() => setIsSentinelDrawerOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-red-600/90 hover:bg-red-500 text-white font-bold text-xs shadow-2xl border border-red-300/40 animate-pulse hover:scale-105 transition-all cursor-pointer"
+            title="Open Inventory Sentinel Side Drawer"
+          >
+            <AlertTriangle className="w-4 h-4 text-white" />
+            <span>
+              ⚠️ {analyzeStockDepletion(inventory)[0].ingredient} Low (
+              {analyzeStockDepletion(inventory)[0].currentStock})
+            </span>
+          </button>
+        </div>
+      )}
+
       {/* Floating Copilot Modal */}
       <AnimatePresence>
         {isCopilotOpen && filterTab !== "dispatch" && (
@@ -1665,6 +1747,318 @@ export default function BaristaKDSPage() {
               </button>
               <BaristaOpsAssistant />
             </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* INVENTORY SENTINEL INTERACTIVE SIDE DRAWER */}
+      <AnimatePresence>
+        {isSentinelDrawerOpen && (
+          <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm">
+            {/* Backdrop click to dismiss */}
+            <div
+              className="absolute inset-0"
+              onClick={() => setIsSentinelDrawerOpen(false)}
+            />
+
+            <motion.aside
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 26, stiffness: 260 }}
+              className="relative z-10 w-full max-w-md h-full bg-[#1A110B] border-l border-white/10 shadow-2xl flex flex-col justify-between overflow-hidden"
+            >
+              {/* Drawer Header */}
+              <div className="p-5 border-b border-white/10 bg-[#22160F] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-300">
+                    <Package className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <span>Inventory Sentinel</span>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-mono">
+                        Live Auto-Deduction
+                      </span>
+                    </h2>
+                    <p className="text-xs text-[#8C7C70]">
+                      Automated auditor tracking burn rate with every purchase.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsSentinelDrawerOpen(false)}
+                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-[#8C7C70] hover:text-white transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Drawer Body Scroll Area */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-6">
+                {/* Toast feedback if recently restocked */}
+                {quickRestockToast && (
+                  <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/50 text-emerald-200 text-xs font-semibold flex items-center gap-2 animate-bounce">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>{quickRestockToast}</span>
+                  </div>
+                )}
+
+                {/* ACTIVE CRITICAL / WARNING DEPLETION ALERTS */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs uppercase font-bold text-[#8C7C70] tracking-wider flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Stockout Risk Analysis</span>
+                    </span>
+                    <span className="font-mono text-[10px] text-stone-400">
+                      {analyzeStockDepletion(inventory).length} Active Alert(s)
+                    </span>
+                  </div>
+
+                  {analyzeStockDepletion(inventory).length === 0 ? (
+                    <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 text-center">
+                      <CheckCircle2 className="w-6 h-6 text-emerald-400 mx-auto mb-1" />
+                      <p className="text-xs font-bold text-emerald-200">All Ingredients Healthy</p>
+                      <p className="text-[11px] text-emerald-300/70 mt-0.5">
+                        Sufficient stock for current rush velocity.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {analyzeStockDepletion(inventory).map((alert, idx) => (
+                        <div
+                          key={idx}
+                          className={`p-3.5 rounded-2xl border text-xs space-y-2 ${
+                            alert.severity === "critical"
+                              ? "bg-red-950/40 border-red-500/50 text-red-200 shadow-lg shadow-red-950/50"
+                              : "bg-amber-950/40 border-amber-500/50 text-amber-200"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase font-mono ${
+                                  alert.severity === "critical"
+                                    ? "bg-red-500 text-white animate-pulse"
+                                    : "bg-amber-500 text-black font-semibold"
+                                }`}
+                              >
+                                {alert.severity}
+                              </span>
+                              <span className="font-bold text-white">{alert.ingredient}</span>
+                            </div>
+                            <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-black/40 text-stone-300">
+                              {alert.currentStock}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-[11px] bg-black/30 p-2 rounded-xl">
+                            <div>
+                              <span className="text-[#8C7C70] block text-[9px] uppercase">Burn Rate</span>
+                              <span className="font-mono font-bold text-white">{alert.burnRatePerHour}</span>
+                            </div>
+                            <div>
+                              <span className="text-[#8C7C70] block text-[9px] uppercase">Est. Stockout</span>
+                              <span className="font-mono font-bold text-amber-300">{alert.predictedDepletionTime}</span>
+                            </div>
+                          </div>
+
+                          <p className="text-[11px] text-[#EDE4DA]/90 italic">
+                            💡 {alert.recommendation}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 1-TAP QUICK RESTOCK FROM REAR STORAGE VAULT */}
+                <div className="space-y-3 pt-3 border-t border-white/10">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs uppercase font-bold text-[#8C7C70] tracking-wider flex items-center gap-1.5">
+                      <RefreshCw className="w-3.5 h-3.5 text-[#DFAB6C]" />
+                      <span>1-Tap Quick Restock</span>
+                    </span>
+                    <span className="text-[10px] text-[#8C7C70]">Rear Van Storage Vault</span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => handleQuickRestock({ paperCups: inventory.paperCups + 10 }, "+10 Cups")}
+                      className="p-2.5 rounded-xl bg-[#22160F] hover:bg-[#2F1F15] border border-white/10 text-center cursor-pointer transition-all hover:border-[#DFAB6C]"
+                    >
+                      <span className="block text-sm font-black font-mono text-[#DFAB6C]">+10</span>
+                      <span className="text-[10px] text-[#EDE4DA]">Paper Cups</span>
+                    </button>
+                    <button
+                      onClick={() => handleQuickRestock({ wholeMilkLiters: Number((inventory.wholeMilkLiters + 5).toFixed(1)) }, "+5L Milk")}
+                      className="p-2.5 rounded-xl bg-[#22160F] hover:bg-[#2F1F15] border border-white/10 text-center cursor-pointer transition-all hover:border-[#DFAB6C]"
+                    >
+                      <span className="block text-sm font-black font-mono text-[#DFAB6C]">+5L</span>
+                      <span className="text-[10px] text-[#EDE4DA]">Whole Milk</span>
+                    </button>
+                    <button
+                      onClick={() => handleQuickRestock({ coffeeBeansKg: Number((inventory.coffeeBeansKg + 5).toFixed(1)) }, "+5kg Beans")}
+                      className="p-2.5 rounded-xl bg-[#22160F] hover:bg-[#2F1F15] border border-white/10 text-center cursor-pointer transition-all hover:border-[#DFAB6C]"
+                    >
+                      <span className="block text-sm font-black font-mono text-[#DFAB6C]">+5kg</span>
+                      <span className="text-[10px] text-[#EDE4DA]">Coffee Beans</span>
+                    </button>
+                    <button
+                      onClick={() => handleQuickRestock({ oatMilkLiters: Number((inventory.oatMilkLiters + 2).toFixed(1)) }, "+2L Oat Milk")}
+                      className="p-2.5 rounded-xl bg-[#22160F] hover:bg-[#2F1F15] border border-white/10 text-center cursor-pointer transition-all hover:border-[#DFAB6C]"
+                    >
+                      <span className="block text-sm font-black font-mono text-[#DFAB6C]">+2L</span>
+                      <span className="text-[10px] text-[#EDE4DA]">Oat Milk</span>
+                    </button>
+                    <button
+                      onClick={() => handleQuickRestock({ vanillaGelatoTubs: Number((inventory.vanillaGelatoTubs + 1).toFixed(1)) }, "+1 Tub Gelato")}
+                      className="p-2.5 rounded-xl bg-[#22160F] hover:bg-[#2F1F15] border border-white/10 text-center cursor-pointer transition-all hover:border-[#DFAB6C]"
+                    >
+                      <span className="block text-sm font-black font-mono text-[#DFAB6C]">+1 Tub</span>
+                      <span className="text-[10px] text-[#EDE4DA]">Gelato Tub</span>
+                    </button>
+                    <button
+                      onClick={() => handleQuickRestock({ bakeryPastries: inventory.bakeryPastries + 10 }, "+10 Pastries")}
+                      className="p-2.5 rounded-xl bg-[#22160F] hover:bg-[#2F1F15] border border-white/10 text-center cursor-pointer transition-all hover:border-[#DFAB6C]"
+                    >
+                      <span className="block text-sm font-black font-mono text-[#DFAB6C]">+10</span>
+                      <span className="text-[10px] text-[#EDE4DA]">Pastries</span>
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      restockInventory();
+                      setQuickRestockToast("✓ Fully replenished all ingredients from vault!");
+                      setTimeout(() => setQuickRestockToast(null), 2500);
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-[#DFAB6C] hover:bg-white text-[#1A110B] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Full Van Vault Replenish (Reset All to Max)</span>
+                  </button>
+                </div>
+
+                {/* CURRENT LIVE STOCK GAUGES */}
+                <div className="space-y-3 pt-3 border-t border-white/10">
+                  <span className="text-xs uppercase font-bold text-[#8C7C70] tracking-wider block">
+                    Current Level Gauges
+                  </span>
+
+                  <div className="space-y-2.5">
+                    {/* Coffee Beans */}
+                    <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-[#EDE4DA] font-semibold">Coffee Beans</span>
+                        <span className="font-mono text-[#DFAB6C] font-bold">{inventory.coffeeBeansKg} kg</span>
+                      </div>
+                      <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${inventory.coffeeBeansKg <= 2 ? "bg-red-500" : "bg-amber-400"}`}
+                          style={{ width: `${Math.min(100, (inventory.coffeeBeansKg / 10) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Whole Milk */}
+                    <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-[#EDE4DA] font-semibold">Whole Milk</span>
+                        <span className="font-mono text-emerald-400 font-bold">{inventory.wholeMilkLiters} L</span>
+                      </div>
+                      <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${inventory.wholeMilkLiters <= 5 ? "bg-red-500" : "bg-emerald-400"}`}
+                          style={{ width: `${Math.min(100, (inventory.wholeMilkLiters / 20) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Paper Cups */}
+                    <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-[#EDE4DA] font-semibold">Paper Cups</span>
+                        <span className="font-mono text-blue-400 font-bold">{inventory.paperCups} cups</span>
+                      </div>
+                      <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${inventory.paperCups <= 25 ? "bg-red-500" : "bg-blue-400"}`}
+                          style={{ width: `${Math.min(100, (inventory.paperCups / 150) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Bakery Pastries */}
+                    <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-[#EDE4DA] font-semibold">Bakery Pastries</span>
+                        <span className="font-mono text-amber-300 font-bold">{inventory.bakeryPastries} pcs</span>
+                      </div>
+                      <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${inventory.bakeryPastries <= 5 ? "bg-red-500" : "bg-amber-400"}`}
+                          style={{ width: `${Math.min(100, (inventory.bakeryPastries / 30) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 86 / SOLD-OUT DIRECT CONTROL */}
+                <div className="space-y-3 pt-3 border-t border-white/10">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs uppercase font-bold text-[#8C7C70] tracking-wider">
+                      Auto 86 / Sold-Out Switcher
+                    </span>
+                    <span className="text-[10px] text-red-400 font-mono font-bold">
+                      {soldOutItemIds.length} Item(s) 86&apos;d
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#8C7C70]">
+                    Toggling an item to 86 immediately grays it out across all customer screens on /menu.
+                  </p>
+
+                  <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                    {MENU_ITEMS.slice(0, 10).map((item) => {
+                      const is86 = soldOutItemIds.includes(item.id);
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between p-2 rounded-xl bg-black/30 text-xs"
+                        >
+                          <span className={`truncate max-w-[180px] ${is86 ? "line-through text-red-400" : "text-[#EDE4DA]"}`}>
+                            {item.name}
+                          </span>
+                          <button
+                            onClick={() => toggleSoldOut(item.id)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-all ${
+                              is86
+                                ? "bg-red-500 text-white hover:bg-red-600"
+                                : "bg-white/10 text-[#8C7C70] hover:text-white hover:bg-white/20"
+                            }`}
+                          >
+                            {is86 ? "86'd (Out)" : "Mark 86"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Drawer Footer */}
+              <div className="p-4 border-t border-white/10 bg-[#22160F] flex items-center justify-between text-xs text-[#8C7C70]">
+                <span>Last Restocked: {new Date(inventory.lastRestockedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                <button
+                  onClick={() => setIsSentinelDrawerOpen(false)}
+                  className="px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-white font-semibold cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.aside>
           </div>
         )}
       </AnimatePresence>
