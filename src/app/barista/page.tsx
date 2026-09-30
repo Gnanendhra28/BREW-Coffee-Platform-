@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
@@ -65,7 +65,7 @@ export default function BaristaKDSPage() {
   const { user, signOutUser } = useAuth();
 
   const [filterTab, setFilterTab] = useState<
-    "active" | "all" | "inventory" | "settings" | "dispatch"
+    "active" | "all" | "curbside" | "inventory" | "settings" | "dispatch"
   >("active");
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -107,6 +107,13 @@ export default function BaristaKDSPage() {
   const [futBadge, setFutBadge] = useState("Confirmed Hub");
   const [futNotes, setFutNotes] = useState("");
   const [futSuccessMsg, setFutSuccessMsg] = useState("");
+
+  // Curbside Drive-Thru Expediter Subsets
+  const curbsideOrders = orders.filter((o) => o.pickupType === "curbside");
+  const activeCurbsideOrders = curbsideOrders.filter((o) => o.status !== "served");
+  const hasArrivedCurbside = activeCurbsideOrders.some(
+    (o) => curbsideArrivals[o.id] === "arrived"
+  );
 
   // Clock
   useEffect(() => {
@@ -150,6 +157,42 @@ export default function BaristaKDSPage() {
       osc.stop(ctx.currentTime + 0.65);
     } catch {}
   };
+
+  // Web Audio Friendly Two-Tone Horn Chime for Curbside Vehicle Arrival
+  const playCarArrivalChime = useCallback(() => {
+    if (!soundEnabled || typeof window === "undefined") return;
+    try {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(349.23, ctx.currentTime); // F4
+      osc.frequency.setValueAtTime(440.0, ctx.currentTime + 0.12); // A4
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.55);
+    } catch {}
+  }, [soundEnabled]);
+
+  // Listen for newly arrived curbside vehicles and sound audio alert
+  const prevCurbsideRef = React.useRef(curbsideArrivals);
+  useEffect(() => {
+    for (const [orderId, status] of Object.entries(curbsideArrivals)) {
+      if (status === "arrived" && prevCurbsideRef.current[orderId] !== "arrived") {
+        playCarArrivalChime();
+        break;
+      }
+    }
+    prevCurbsideRef.current = curbsideArrivals;
+  }, [curbsideArrivals, playCarArrivalChime]);
 
   const getStatusBadge = (status: OrderStatus) => {
     switch (status) {
@@ -266,6 +309,28 @@ export default function BaristaKDSPage() {
             }`}
           >
             All History ({orders.length})
+          </button>
+          <button
+            onClick={() => setFilterTab("curbside")}
+            className={`px-3 sm:px-4 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              filterTab === "curbside"
+                ? "bg-[#DFAB6C] text-[#1A110B] shadow-sm"
+                : "text-[#8C7C70] hover:text-white"
+            }`}
+          >
+            <Car className="w-3.5 h-3.5 text-blue-400" />
+            <span>Curbside</span>
+            {activeCurbsideOrders.length > 0 && (
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono ${
+                  hasArrivedCurbside
+                    ? "bg-emerald-500 text-stone-950 animate-pulse ring-2 ring-emerald-300"
+                    : "bg-blue-500 text-white"
+                }`}
+              >
+                {activeCurbsideOrders.length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setFilterTab("inventory")}
@@ -693,6 +758,220 @@ export default function BaristaKDSPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* VIEW 2.5: CURBSIDE DRIVE-THRU EXPEDITER (Agent #2) */}
+        {filterTab === "curbside" && (
+          <div className="space-y-6">
+            {/* Header & Sub-60s Expediter Mission Banner */}
+            <div className="p-6 rounded-3xl bg-gradient-to-r from-[#20140D] via-[#2A180E] to-[#1C120B] border border-blue-500/30 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-blue-500/15 border border-blue-400/30 flex items-center justify-center text-blue-300 shrink-0">
+                  <Car className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <h1 className="text-xl font-bold text-white tracking-wide uppercase font-sans">
+                      Curbside Drive-Thru Expediter
+                    </h1>
+                    <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-[10px] font-mono font-bold uppercase">
+                      Agent #2
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#C4B4A8] mt-1 max-w-2xl leading-relaxed">
+                    Virtual drive-thru lane synchronizing espresso extraction timing with vehicle arrival for sub-60 second window handover. Eliminates parking hassle in corporate tech hubs.
+                  </p>
+                </div>
+              </div>
+
+              {/* Real-Time Expediter Metrics */}
+              <div className="grid grid-cols-3 gap-2.5 shrink-0 bg-black/40 p-3 rounded-2xl border border-white/5 text-center">
+                <div className="px-3">
+                  <span className="text-[10px] text-[#8C7C70] uppercase font-bold block">Vehicles in Bay</span>
+                  <span className="text-xl font-black font-mono text-white">{activeCurbsideOrders.length}</span>
+                </div>
+                <div className="px-3 border-x border-white/10">
+                  <span className="text-[10px] text-amber-400 uppercase font-bold block">⚡ Approaching</span>
+                  <span className="text-xl font-black font-mono text-amber-300">
+                    {activeCurbsideOrders.filter((o) => curbsideArrivals[o.id] === "approaching").length}
+                  </span>
+                </div>
+                <div className="px-3">
+                  <span className="text-[10px] text-emerald-400 uppercase font-bold block">🚨 At Curb Bay</span>
+                  <span className="text-xl font-black font-mono text-emerald-300">
+                    {activeCurbsideOrders.filter((o) => curbsideArrivals[o.id] === "arrived").length}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Curbside Orders Stream */}
+            {curbsideOrders.length === 0 ? (
+              <div className="p-12 rounded-3xl bg-[#1E130D]/70 border border-white/10 text-center max-w-md mx-auto">
+                <Car className="w-12 h-12 text-[#8C7C70] mx-auto mb-3 opacity-60" />
+                <h3 className="text-base font-bold text-white mb-1">No Curbside Orders Yet</h3>
+                <p className="text-xs text-[#8C7C70]">
+                  When customers select &quot;Curbside Pickup&quot; on /cart, their vehicle details and live arrival beacons will flash here in real time.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <AnimatePresence>
+                  {curbsideOrders.map((order) => {
+                    const arrivalStatus = curbsideArrivals[order.id];
+                    const isArrived = arrivalStatus === "arrived";
+                    const isApproaching = arrivalStatus === "approaching";
+                    const elapsedMins = Math.floor((currentTimestamp - order.createdAt) / 60000);
+
+                    return (
+                      <motion.div
+                        key={order.id}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className={`p-5 rounded-3xl border transition-all flex flex-col justify-between shadow-xl ${
+                          isArrived
+                            ? "bg-gradient-to-b from-[#1C2619] to-[#121B10] border-emerald-500/60 ring-2 ring-emerald-500/40"
+                            : isApproaching
+                            ? "bg-gradient-to-b from-[#281E12] to-[#1C140B] border-amber-500/60 ring-2 ring-amber-500/40"
+                            : "bg-[#1E130D] border-white/10"
+                        }`}
+                      >
+                        <div>
+                          {/* Card Header: Token & Arrival Status */}
+                          <div className="flex items-center justify-between gap-2 pb-3 border-b border-white/10">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xl font-extrabold text-[#DFAB6C]">
+                                #{order.orderNumber}
+                              </span>
+                              <span className="text-sm font-bold text-white truncate max-w-[140px]">
+                                {order.customerName}
+                              </span>
+                            </div>
+
+                            {/* Arrival Pulse Badge */}
+                            {isArrived ? (
+                              <span className="px-2.5 py-1 rounded-full bg-emerald-500 text-stone-950 font-black text-[10px] uppercase font-mono tracking-wider flex items-center gap-1.5 animate-pulse shadow-md">
+                                <span className="w-2 h-2 rounded-full bg-stone-950 animate-ping" />
+                                🚨 AT CURB
+                              </span>
+                            ) : isApproaching ? (
+                              <span className="px-2.5 py-1 rounded-full bg-amber-500 text-stone-950 font-black text-[10px] uppercase font-mono tracking-wider flex items-center gap-1.5 animate-pulse shadow-md">
+                                <span className="w-2 h-2 rounded-full bg-stone-950 animate-ping" />
+                                ⚡ ~2M AWAY
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full bg-white/10 text-stone-300 text-[10px] font-mono">
+                                In Transit
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Vehicle Details Pill */}
+                          <div className="my-3 p-3 rounded-2xl bg-black/40 border border-white/5 space-y-1">
+                            <span className="text-[10px] uppercase font-bold text-blue-400 tracking-wider flex items-center gap-1">
+                              <Car className="w-3 h-3 text-blue-400" />
+                              <span>Vehicle Identification</span>
+                            </span>
+                            <p className="text-xs font-mono font-bold text-white">
+                              {order.vehicleInfo || "Curbside Van Window Bay"}
+                            </p>
+                          </div>
+
+                          {/* Live Barista Action Guidance */}
+                          {isArrived ? (
+                            <div className="mb-3 p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/50 text-xs text-emerald-200">
+                              <span className="font-bold block text-white">🚨 Vehicle Parked at Bay!</span>
+                              <span className="text-[11px] text-emerald-300/90">
+                                Grab carry bag with tray and deliver to vehicle window immediately.
+                              </span>
+                            </div>
+                          ) : isApproaching ? (
+                            <div className="mb-3 p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/50 text-xs text-amber-200">
+                              <span className="font-bold block text-white">⚡ Approaching (~2 Min ETA)!</span>
+                              <span className="text-[11px] text-amber-300/90">
+                                Start pulling double-shot &amp; steaming milk now for fresh crema at car window!
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="mb-3 p-2.5 rounded-xl bg-white/5 border border-white/5 text-[11px] text-[#8C7C70]">
+                              Waiting for guest to beacon approaching status from their phone buzzer.
+                            </div>
+                          )}
+
+                          {/* Ordered Items */}
+                          <div className="space-y-1.5 my-3">
+                            {order.items.map((item, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between text-xs py-1 px-2.5 rounded-lg bg-black/20"
+                              >
+                                <span className="font-medium text-[#EDE4DA]">
+                                  {item.quantity}x {item.name}
+                                </span>
+                                <span className="font-mono text-[#8C7C70]">
+                                  ₹{(item.price * item.quantity).toLocaleString("en-IN")}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Handover Actions */}
+                        <div className="pt-3 border-t border-white/10 space-y-2">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-[#8C7C70]">Total: ₹{order.totalAmount}</span>
+                            <span className="text-[11px] text-[#8C7C70] font-mono">
+                              {elapsedMins === 0 ? "Just now" : `${elapsedMins}m ago`}
+                            </span>
+                          </div>
+
+                          {order.status === "received" && (
+                            <button
+                              onClick={() => updateOrderStatus(order.id, "brewing")}
+                              className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                            >
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <span>Start Brewing (Extraction Synced)</span>
+                            </button>
+                          )}
+
+                          {order.status === "brewing" && (
+                            <button
+                              onClick={() => {
+                                updateOrderStatus(order.id, "ready");
+                                playCarArrivalChime();
+                              }}
+                              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Mark Ready in Tray</span>
+                            </button>
+                          )}
+
+                          {order.status === "ready" && (
+                            <button
+                              onClick={() => updateOrderStatus(order.id, "served")}
+                              className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                            >
+                              <Car className="w-4 h-4" />
+                              <span>🚗 Complete Car Handover (Mark Served)</span>
+                            </button>
+                          )}
+
+                          {order.status === "served" && (
+                            <div className="p-2 text-center rounded-xl bg-white/5 text-[#8C7C70] text-xs font-semibold">
+                              ✓ Handover Complete
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
         )}
 

@@ -174,8 +174,25 @@ const INITIAL_DEMO_ORDERS: VanOrder[] = [
     status: "brewing",
     createdAt: Date.now() - 1000 * 60 * 2,
     pickupType: "curbside",
-    vehicleInfo: "White Thar, Hazard lights on (Near Gate 2)",
-    vanLocationName: "Jubilee Hills Road No. 36 (Hyderabad)",
+    vehicleInfo: "White Mahindra Thar (TS 09 EA 4402) — Hazard lights on",
+    curbsideArrivalStatus: "approaching",
+    vanLocationName: "HITEC City — Cyber Towers (Hyderabad)",
+  },
+  {
+    id: "ord-104",
+    orderNumber: "104",
+    customerName: "Ananya Deshmukh",
+    items: [
+      { id: "c-4", name: "Cold Brew", price: 240, image: "/assets/coffee/cold brew.webp", category: "Coffee", quantity: 2 },
+      { id: "d-1", name: "Classic Brownie", price: 150, image: "/assets/desserts /brownie.webp", category: "Desserts", quantity: 1 },
+    ],
+    totalAmount: 630,
+    status: "ready",
+    createdAt: Date.now() - 1000 * 60 * 3,
+    pickupType: "curbside",
+    vehicleInfo: "Silver Honda Civic (TS 09 AB 1234) — Bay #2",
+    curbsideArrivalStatus: "arrived",
+    vanLocationName: "HITEC City — Cyber Towers (Hyderabad)",
   },
 ];
 
@@ -188,6 +205,7 @@ export const VanProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [flashDeal, setFlashDeal] = useState<FlashDealConfig>(DEFAULT_FLASH_DEAL);
   const [curbsideArrivals, setCurbsideArrivals] = useState<Record<string, "approaching" | "arrived">>({
     "ord-103": "approaching",
+    "ord-104": "arrived",
   });
   const [isInitialized, setIsInitialized] = useState(false);
 
