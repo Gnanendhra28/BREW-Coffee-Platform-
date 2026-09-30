@@ -387,7 +387,7 @@ export function evaluateIngredientStockout(
   } else if (stockoutHours <= leadTime * 1.5) {
     riskLevel = "MEDIUM";
     recommendationText = `MEDIUM: Approaching reorder threshold. Projected stockout in ~${stockoutHours}h. Prepare restock order of ${recommendedQuantity} ${ingredient.unit}.`;
-  } else if (stockoutHours <= leadTime * 3.0) {
+  } else if (stockoutHours <= leadTime * 2.0) {
     riskLevel = "LOW";
     recommendationText = `LOW: Ample supply for next ~${stockoutHours}h. Monitor burn rate during peak traffic window.`;
   }

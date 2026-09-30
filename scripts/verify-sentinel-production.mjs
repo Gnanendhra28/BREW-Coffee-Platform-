@@ -309,7 +309,7 @@ function evaluateIngredientStockout(ingredient, currentStock, predictedRate, lea
     riskLevel = "HIGH";
   } else if (stockoutHours <= leadTimeHours * 1.5) {
     riskLevel = "MEDIUM";
-  } else if (stockoutHours <= leadTimeHours * 3.0) {
+  } else if (stockoutHours <= leadTimeHours * 2.0) {
     riskLevel = "LOW";
   }
 
