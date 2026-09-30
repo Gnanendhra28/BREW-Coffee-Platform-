@@ -10,11 +10,9 @@ import {
   createHypeCampaign,
   getHypeCampaign,
   updateCampaignStatus,
-  listHypeCampaigns,
 } from "./campaigns";
 import {
   validateCampaignPreSend,
-  validateCampaignCopyFacts,
 } from "./policy";
 import { dispatchCampaignMessages } from "./delivery";
 import { getHypeBroadcasterMetrics } from "./analytics";
@@ -23,7 +21,6 @@ import {
   StoreMarketingContext,
   MarketingOpportunity,
   AudienceCriteria,
-  CampaignMessageCopy,
 } from "./types";
 
 /**

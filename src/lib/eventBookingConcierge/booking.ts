@@ -4,7 +4,6 @@
 import {
   EventQuotationRecord,
   BookingRecord,
-  QuotationTier,
 } from "./types";
 import {
   generateBookingIdempotencyKey,
@@ -61,7 +60,7 @@ export function createBookingFromQuote(params: {
     tierId
   );
 
-  const dupCheck = isBookingActionDuplicate(idempotencyKey);
+  const dupCheck = isBookingActionDuplicate<BookingRecord>(idempotencyKey);
   if (dupCheck.isDuplicate && dupCheck.existingRecord) {
     return {
       success: true,

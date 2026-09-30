@@ -13,7 +13,6 @@ import {
   BundleCandidate,
   YieldFlashDealRecord,
   YieldOptimizerMetrics,
-  WasteRiskLevel,
 } from "./types";
 import {
   parseClosingHour,

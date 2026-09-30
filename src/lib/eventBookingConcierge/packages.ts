@@ -1,8 +1,6 @@
 // Configurable Package Definitions for Agent 4: 🎪 Event Booking Concierge
 // Defines standard 3-tier catering architecture with strict operational SLAs.
 
-import { QuotationTier } from "./types";
-
 export interface PackageDefinition {
   tierId: "BASIC" | "STANDARD" | "PREMIUM";
   name: string;

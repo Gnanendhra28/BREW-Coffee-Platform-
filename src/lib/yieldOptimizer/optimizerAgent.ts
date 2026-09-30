@@ -3,6 +3,7 @@
 
 import {
   WasteRiskAssessment,
+  WasteRiskLevel,
   BundleCandidate,
   YieldFlashDealRecord,
   YieldOptimizerAuditLog,
@@ -25,7 +26,7 @@ export interface YieldOptimizerCycleResult {
   triggerEvent: string;
   evaluatedPastriesCount: number;
   totalSurplusUnits: number;
-  highestRiskLevel: string;
+  highestRiskLevel: WasteRiskLevel;
   assessments: WasteRiskAssessment[];
   dealsGenerated: YieldFlashDealRecord[];
   auditLog: YieldOptimizerAuditLog;
@@ -60,7 +61,7 @@ export function runYieldOptimizerCycle(options: {
     const assessments: WasteRiskAssessment[] = [];
     const dealsGenerated: YieldFlashDealRecord[] = [];
     let totalSurplus = 0;
-    let highestRisk: string = "SAFE";
+    let highestRisk: WasteRiskLevel = "SAFE";
 
     const riskRank: Record<string, number> = {
       SAFE: 0,
@@ -129,7 +130,7 @@ export function runYieldOptimizerCycle(options: {
       timestamp: Date.now(),
       triggerEvent,
       activeSurplusUnits: totalSurplus,
-      wasteRisk: highestRisk as any,
+      wasteRisk: highestRisk,
       candidateBundlesCount: dealsGenerated.length,
       selectedBundleId: firstDeal?.candidate.bundleId,
       discountPercent: firstDeal?.candidate.discountPercent,
@@ -159,7 +160,7 @@ export function runYieldOptimizerCycle(options: {
       auditLog: audit,
       latencyMs,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     const latencyMs = Number((performance.now() - startTime).toFixed(2));
     const errorAudit = recordYieldAuditLog({
       runId,
@@ -174,7 +175,7 @@ export function runYieldOptimizerCycle(options: {
       toolsCalled: Array.from(new Set(toolsCalled)),
       executionResult: "REJECTED",
       latencyMs,
-      error: err?.message || String(err),
+      error: err instanceof Error ? err.message : String(err),
     });
 
     return {

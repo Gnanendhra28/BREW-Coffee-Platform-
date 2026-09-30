@@ -6,7 +6,7 @@
 // 4. Financial Economics (Gross Margin Amount, Percentage, Discount Bounds)
 // 5. Campaign Duration Capping (closing time, shelf-life expiry)
 
-import { WasteRiskLevel, WasteRiskAssessment } from "./types";
+import { WasteRiskAssessment } from "./types";
 
 export const YIELD_CONFIG = {
   minDiscountPercent: 10,

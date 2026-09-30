@@ -14,7 +14,7 @@ export const MAX_EVENT_DURATION_MINUTES = 720; // 12 Hours
 export const MAX_SERVICEABLE_RADIUS_KM = 60;
 
 // Known serviceable hubs & landmarks within Greater Hyderabad mobile van radius
-const SERVICEABLE_LOCATIONS = new Set([
+export const SERVICEABLE_LOCATIONS = new Set([
   "dlf cybercity",
   "cyber towers",
   "mindspace",

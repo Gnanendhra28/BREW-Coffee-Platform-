@@ -3,7 +3,7 @@
 import { QuoteStatus, BookingStatus } from "./types";
 
 // Master Idempotency Registry: key -> record
-const IDEMPOTENCY_REGISTRY = new Map<string, any>();
+const IDEMPOTENCY_REGISTRY = new Map<string, unknown>();
 
 // Master Resource Schedule Registry: dateSlot -> bookingId
 // e.g. "2026-10-15:MORNING" or "2026-10-15:AFTERNOON" or "2026-10-15:ALL_DAY"
@@ -60,9 +60,9 @@ export function generateBookingIdempotencyKey(
 /**
  * Checks if an operation with this idempotency key has already been executed.
  */
-export function isBookingActionDuplicate(key: string): { isDuplicate: boolean; existingRecord?: any } {
+export function isBookingActionDuplicate<T = unknown>(key: string): { isDuplicate: boolean; existingRecord?: T } {
   if (IDEMPOTENCY_REGISTRY.has(key)) {
-    return { isDuplicate: true, existingRecord: IDEMPOTENCY_REGISTRY.get(key) };
+    return { isDuplicate: true, existingRecord: IDEMPOTENCY_REGISTRY.get(key) as T };
   }
   return { isDuplicate: false };
 }
@@ -70,7 +70,7 @@ export function isBookingActionDuplicate(key: string): { isDuplicate: boolean; e
 /**
  * Registers an executed action under an idempotency key.
  */
-export function registerIdempotentAction(key: string, record: any): void {
+export function registerIdempotentAction<T = unknown>(key: string, record: T): void {
   IDEMPOTENCY_REGISTRY.set(key, record);
 }
 

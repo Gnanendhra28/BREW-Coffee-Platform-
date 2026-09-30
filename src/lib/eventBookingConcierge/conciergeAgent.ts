@@ -194,7 +194,7 @@ Quote valid until: ${new Date(quote.expiresAt).toLocaleDateString("en-IN", { dat
       auditLog: audit,
       latencyMs,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     const latencyMs = Number((performance.now() - startTime).toFixed(2));
     const audit = recordConciergeAuditLog({
       runId,
@@ -209,7 +209,7 @@ Quote valid until: ${new Date(quote.expiresAt).toLocaleDateString("en-IN", { dat
       toolsCalled,
       executionResult: "REJECTED",
       latencyMs,
-      error: err?.message || String(err),
+      error: err instanceof Error ? err.message : String(err),
     });
 
     return {
@@ -220,7 +220,7 @@ Quote valid until: ${new Date(quote.expiresAt).toLocaleDateString("en-IN", { dat
       validation: {
         isValid: false,
         missingFields: [],
-        errors: [err?.message || "Internal error"],
+        errors: [err instanceof Error ? err.message : "Internal error"],
         isServiceable: false,
         dietaryConfirmed: false,
         unconfirmedDietaryRequirements: [],

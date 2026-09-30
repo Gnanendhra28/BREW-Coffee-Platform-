@@ -7,7 +7,7 @@ import { listHypeCampaigns } from "./campaigns";
 export function getHypeBroadcasterMetrics(storeId?: string): HypeBroadcasterMetrics {
   const campaigns = listHypeCampaigns(storeId);
 
-  let campaignsGenerated = campaigns.length;
+  const campaignsGenerated = campaigns.length;
   let campaignsApproved = 0;
   let campaignsSent = 0;
   let campaignsBlocked = 0;
@@ -15,7 +15,6 @@ export function getHypeBroadcasterMetrics(storeId?: string): HypeBroadcasterMetr
   let totalAudienceReached = 0;
   let totalDeliverySuccess = 0;
   let totalDeliveryFailures = 0;
-  let totalOpens = 0;
   let totalClicks = 0;
   let totalConversions = 0;
   let totalRevenueAttributed = 0;
@@ -37,7 +36,6 @@ export function getHypeBroadcasterMetrics(storeId?: string): HypeBroadcasterMetr
     totalAudienceReached += c.metrics.targetedCount;
     totalDeliverySuccess += c.metrics.deliveredCount;
     totalDeliveryFailures += c.metrics.failedCount;
-    totalOpens += c.metrics.openCount;
     totalClicks += c.metrics.clickCount;
     totalConversions += c.metrics.conversionCount;
     totalRevenueAttributed += c.metrics.revenueGenerated;

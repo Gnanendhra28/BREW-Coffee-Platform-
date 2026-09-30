@@ -7,9 +7,7 @@
 
 import {
   CustomerMarketingProfile,
-  CampaignMessageCopy,
   HypeCampaignRecord,
-  CampaignPerformanceMetrics,
 } from "./types";
 
 export interface DeliveryResult {
@@ -78,14 +76,14 @@ export async function dispatchCampaignMessages(
         });
         // We deliver via primary matched channel
         break;
-      } catch (err: any) {
+      } catch (err: unknown) {
         failedCount++;
         results.push({
           recipientId: customer.customerId,
           channel,
           status: "FAILED",
           timestamp: Date.now(),
-          error: err.message || "Network transmission error",
+          error: err instanceof Error ? err.message : "Network transmission error",
         });
       }
     }

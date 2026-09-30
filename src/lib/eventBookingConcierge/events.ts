@@ -1,7 +1,6 @@
 // Event Dispatcher and Reactive Pipeline Router for Agent 4: 🎪 Event Booking Concierge
 
 import {
-  EventQuotationRecord,
   BookingRecord,
 } from "./types";
 import { processEventInquiry, ConciergeInquiryResult } from "./conciergeAgent";
@@ -17,7 +16,7 @@ export interface ConciergeEvent {
     | "BOOKING_CANCELLED"
     | "RESOURCE_RESERVED";
   timestamp: number;
-  payload: Record<string, any>;
+  payload: Record<string, unknown>;
 }
 
 type ConciergeEventListener = (event: ConciergeEvent) => void;
@@ -54,9 +53,9 @@ export function handleConciergeEvent(
 
   switch (event.type) {
     case "EVENT_INQUIRY_RECEIVED": {
-      const input = event.payload.inquiryText || event.payload.requirements;
+      const input = (event.payload.inquiryText || event.payload.requirements) as string | Record<string, unknown>;
       const res = processEventInquiry(input, {
-        customerId: event.payload.customerId,
+        customerId: typeof event.payload.customerId === "string" ? event.payload.customerId : undefined,
       });
       return {
         handled: true,
@@ -66,9 +65,9 @@ export function handleConciergeEvent(
     }
 
     case "QUOTE_ACCEPTED": {
-      const quoteId = event.payload.quoteId;
-      const selectedTierId = event.payload.selectedTierId;
-      const timeSlot = event.payload.timeSlot;
+      const quoteId = String(event.payload.quoteId || "");
+      const selectedTierId = event.payload.selectedTierId as "BASIC" | "STANDARD" | "PREMIUM" | undefined;
+      const timeSlot = typeof event.payload.timeSlot === "string" ? event.payload.timeSlot : undefined;
 
       const acceptRes = tool_accept_quote({
         quoteId,
@@ -84,7 +83,8 @@ export function handleConciergeEvent(
     }
 
     case "BOOKING_CANCELLED": {
-      const { eventDate, timeSlot } = event.payload;
+      const eventDate = typeof event.payload.eventDate === "string" ? event.payload.eventDate : undefined;
+      const timeSlot = typeof event.payload.timeSlot === "string" ? event.payload.timeSlot : undefined;
       if (eventDate && timeSlot) {
         releaseSlot(eventDate, timeSlot);
       }

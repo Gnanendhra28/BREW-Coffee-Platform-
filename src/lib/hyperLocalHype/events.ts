@@ -1,11 +1,7 @@
 // Reactive Event Bus & Pipeline Router for Agent 5: 📢 Hyper-Local Hype Broadcaster
 // Listens to weather shifts, inventory surpluses, yield optimizer deals, and approval requests.
 
-import {
-  WeatherSnapshot,
-  StoreMarketingContext,
-  HypeCampaignRecord,
-} from "./types";
+import { WeatherSnapshot } from "./types";
 import { runHypeBroadcasterCycle } from "./hypeAgent";
 
 export type HypeBroadcasterEventType =
@@ -22,7 +18,10 @@ export interface HypeBroadcasterEvent {
   eventType: HypeBroadcasterEventType;
   storeId: string;
   timestamp: number;
-  payload: any;
+  payload: {
+    weather?: WeatherSnapshot;
+    [key: string]: unknown;
+  };
 }
 
 type HypeEventHandler = (event: HypeBroadcasterEvent) => Promise<void> | void;

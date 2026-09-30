@@ -1,7 +1,7 @@
 // Deterministic Opportunity Detection Engine for Agent 5: 📢 Hyper-Local Hype Broadcaster
 // Evaluates real-time store context (weather, time-of-day, promotions, inventory) and generates prioritized opportunities.
 
-import { StoreMarketingContext, MarketingOpportunity, MarketingOpportunityType } from "./types";
+import { StoreMarketingContext, MarketingOpportunity } from "./types";
 
 /**
  * Detects all valid marketing opportunities based on deterministic store context signals.

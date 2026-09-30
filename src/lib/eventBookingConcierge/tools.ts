@@ -14,11 +14,10 @@ import {
 } from "./types";
 import { parseNaturalLanguageEventRequest } from "./parser";
 import { validateEventRequirements } from "./validation";
-import { calculateConsumption, buildIngredientManifest } from "./consumption";
+import { calculateConsumption } from "./consumption";
 import { calculateStaffing } from "./staffing";
 import { calculateEquipment } from "./equipment";
 import { calculateLogistics } from "./logistics";
-import { calculateTierCostBreakdown, calculateTierEconomics } from "./calculations";
 import { generateEventQuotationRecord } from "./quoteEngine";
 import { createBookingFromQuote, getAllBookings } from "./booking";
 import { checkSlotAvailability } from "./policy";
