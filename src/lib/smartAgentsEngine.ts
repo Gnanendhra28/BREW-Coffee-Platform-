@@ -202,6 +202,8 @@ export function analyzeStockDepletion(stock: InventoryStock): DepletionAlert[] {
   return alerts;
 }
 
+export * from "./inventorySentinel";
+
 import { FlashDealSchema, EventQuotationSchema, SocialBroadcastArraySchema, ReviewRecoveryNoticeSchema } from "./agentSchemas";
 
 // -------------------------------------------------------------

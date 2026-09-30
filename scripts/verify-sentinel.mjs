@@ -4,6 +4,8 @@
 // 2. analyzeStockDepletion thresholds, burn rates, severity levels, and actionable recommendations
 // 3. Cloud Real-time synchronization of inventory updates
 
+import { execSync } from "node:child_process";
+
 const DEFAULT_INVENTORY_STOCK = {
   coffeeBeansKg: 6.2,
   wholeMilkLiters: 12.5,
@@ -252,6 +254,8 @@ function runSentinelVerification() {
   console.log(`    - Coffee Beans: ${beansAlert.currentStock} (${beansAlert.burnRatePerHour}) -> "${beansAlert.recommendation}"`);
 
   console.log("✅ PASS: All stockout analysis calculations, burn velocities, and recommendations verified.\n");
+
+  execSync("node scripts/verify-sentinel-production.mjs", { stdio: "inherit" });
 
   console.log("🎉 ALL INVENTORY SENTINEL TESTS COMPLETED SUCCESSFULLY!");
 }

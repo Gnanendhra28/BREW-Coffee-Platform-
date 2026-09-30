@@ -41,6 +41,12 @@ import {
   generateSocialBroadcast,
   evaluateYieldOpportunity,
   YIELD_PRESET_BUNDLES,
+  getTrackedIngredients,
+  analyzeConsumptionRates,
+  forecastDemand,
+  evaluateIngredientStockout,
+  calculateInventoryHealthScore,
+  tool_create_restock_request,
 } from "@/lib/smartAgentsEngine";
 
 export default function BaristaKDSPage() {
@@ -2267,6 +2273,154 @@ export default function BaristaKDSPage() {
                     <span>{quickRestockToast}</span>
                   </div>
                 )}
+
+                {/* AUTONOMOUS INVENTORY HEALTH SCORE & INTELLIGENCE MATRIX */}
+                {(() => {
+                  const tracked = getTrackedIngredients(inventory);
+                  const analytics = tracked.map((t) => analyzeConsumptionRates(t));
+                  const predictions = tracked.map((t, idx) => {
+                    const fc = forecastDemand(t, analytics[idx], t.leadTimeHours);
+                    return evaluateIngredientStockout(t, analytics[idx], fc);
+                  });
+                  const healthScore = calculateInventoryHealthScore(predictions, analytics);
+
+                  return (
+                    <div className="space-y-4">
+                      {/* INVENTORY HEALTH SCORE CARD */}
+                      <div className="p-4 rounded-2xl bg-gradient-to-br from-black/60 to-[#1F140D] border border-white/10 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs uppercase font-bold text-[#8C7C70] tracking-wider flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Inventory Health Index</span>
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded font-mono font-bold text-xs ${
+                              healthScore.status === "EXCELLENT" || healthScore.status === "HEALTHY"
+                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                : healthScore.status === "ATTENTION"
+                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                : "bg-red-500/20 text-red-300 border border-red-500/30"
+                            }`}
+                          >
+                            {healthScore.score}/100 · {healthScore.status}
+                          </span>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              healthScore.score >= 75
+                                ? "bg-emerald-400"
+                                : healthScore.score >= 50
+                                ? "bg-amber-400"
+                                : "bg-red-500"
+                            }`}
+                            style={{ width: `${healthScore.score}%` }}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 pt-1 text-[10px] text-[#A8988B] font-mono">
+                          <div>
+                            <span className="block text-[#8C7C70]">Coverage</span>
+                            <span className="font-bold text-white">{(healthScore.stockCoverageRatio * 100).toFixed(0)}%</span>
+                          </div>
+                          <div>
+                            <span className="block text-[#8C7C70]">Safety Level</span>
+                            <span className="font-bold text-white">{(healthScore.stockoutRiskIndex * 100).toFixed(0)}% Safe</span>
+                          </div>
+                          <div>
+                            <span className="block text-[#8C7C70]">Reliability</span>
+                            <span className="font-bold text-white">{(healthScore.supplierReliabilityIndex * 100).toFixed(0)}%</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* INGREDIENT INTELLIGENCE MATRIX */}
+                      <div className="space-y-2">
+                        <span className="text-xs uppercase font-bold text-[#8C7C70] tracking-wider block">
+                          Stock Intelligence &amp; Reorder Forecast
+                        </span>
+
+                        <div className="space-y-2">
+                          {predictions.map((p) => (
+                            <div
+                              key={p.ingredientId}
+                              className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-2 hover:border-white/10 transition-all text-xs"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold font-mono uppercase ${
+                                      p.riskLevel === "CRITICAL"
+                                        ? "bg-red-500/20 text-red-300 border border-red-500/40"
+                                        : p.riskLevel === "HIGH"
+                                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                        : p.riskLevel === "MEDIUM"
+                                        ? "bg-yellow-500/10 text-yellow-300 border border-yellow-500/20"
+                                        : "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
+                                    }`}
+                                  >
+                                    {p.riskLevel}
+                                  </span>
+                                  <span className="font-bold text-white">{p.ingredientName}</span>
+                                </div>
+                                <span className="font-mono text-[#DFAB6C] font-bold">
+                                  {p.currentStock} {p.unit}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-2 text-[10px] bg-black/30 p-2 rounded-lg font-mono">
+                                <div>
+                                  <span className="text-[#8C7C70] block">Burn Rate</span>
+                                  <span className="text-white">~{p.predictedConsumptionRate} {p.unit}/h</span>
+                                </div>
+                                <div>
+                                  <span className="text-[#8C7C70] block">Reorder Pt</span>
+                                  <span className="text-amber-300">@{p.reorderPoint} {p.unit}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[#8C7C70] block">Stockout In</span>
+                                  <span className="text-white">
+                                    {p.stockoutHours !== null ? `${p.stockoutHours}h` : "Ample"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {p.recommendedOrderQuantity > 0 && (
+                                <div className="pt-1.5 border-t border-white/5 flex items-center justify-between gap-2">
+                                  <span className="text-[10px] text-amber-200">
+                                    Recommended: <strong className="font-mono text-white">{p.recommendedOrderQuantity} {p.unit}</strong>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const res = tool_create_restock_request({
+                                        storeId: "van-01",
+                                        ingredientId: p.ingredientId,
+                                        quantityUnits: p.recommendedOrderQuantity,
+                                      });
+                                      if (res.success && res.request) {
+                                        setQuickRestockToast(`✓ Created PO for ${p.recommendedOrderQuantity} ${p.unit} ${p.ingredientName}!`);
+                                        setTimeout(() => setQuickRestockToast(null), 3000);
+                                      } else if (res.isDuplicate) {
+                                        setQuickRestockToast(`⚠️ PO already active for ${p.ingredientName}`);
+                                        setTimeout(() => setQuickRestockToast(null), 3000);
+                                      }
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold cursor-pointer transition-all"
+                                  >
+                                    Order from Supplier
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* ACTIVE CRITICAL / WARNING DEPLETION ALERTS */}
                 <div className="space-y-3">
