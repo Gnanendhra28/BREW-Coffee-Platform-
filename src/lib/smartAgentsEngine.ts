@@ -202,7 +202,7 @@ export function analyzeStockDepletion(stock: InventoryStock): DepletionAlert[] {
   return alerts;
 }
 
-import { FlashDealSchema, EventQuotationSchema } from "./agentSchemas";
+import { FlashDealSchema, EventQuotationSchema, SocialBroadcastArraySchema } from "./agentSchemas";
 
 // -------------------------------------------------------------
 // 2. FLASH DEAL & YIELD OPTIMIZER ENGINE (Agent #3)
@@ -442,7 +442,7 @@ export function generateSocialBroadcast(station: {
 }): SocialBroadcastPost[] {
   const weatherNote = station.weatherCondition ? `It's a ${station.weatherCondition} (${station.tempC}°C)` : "The coffee aroma is in the air";
 
-  return [
+  const posts: SocialBroadcastPost[] = [
     {
       platform: "WhatsApp Status",
       headline: `🚐 BREW Van Live at ${station.spotName}!`,
@@ -460,6 +460,15 @@ export function generateSocialBroadcast(station: {
       shareableUrl: "https://www.instagram.com/",
     },
     {
+      platform: "Twitter / X",
+      headline: `🚐 Sighted: BREW Van at ${station.spotName}`,
+      body: `🚨 We are parked at ${station.spotName} (${station.landmark})!\n${weatherNote}.\n\nPulling fresh single-origin shots & hot milk microfoam right now. ⚡ Pre-order curbside: https://brew-coffee.cafe/location`,
+      hashtags: ["#BREW", "#SpecialtyCoffee", `#${station.city.replace(/\s+/g, "")}`],
+      shareableUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+        `🚨 The @BREWCoffee van is live at ${station.spotName}! Serving fresh espresso & bakery pastries. Grab a cup: https://brew-coffee.cafe/location`
+      )}`,
+    },
+    {
       platform: "SMS Alert",
       headline: "BREW Flash Station Update",
       body: `BREW Alert: Mobile Van is now stationing at ${station.spotName}. Skip the cafe queue—order on brew-coffee.cafe for rapid car pickup!`,
@@ -467,6 +476,8 @@ export function generateSocialBroadcast(station: {
       shareableUrl: "",
     },
   ];
+
+  return SocialBroadcastArraySchema.parse(posts);
 }
 
 // -------------------------------------------------------------

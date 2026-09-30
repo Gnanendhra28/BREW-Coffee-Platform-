@@ -97,6 +97,18 @@ export const EventQuotationSchema = z.object({
 
 export type EventQuotationOutput = z.infer<typeof EventQuotationSchema>;
 
+// 5. Hyper-Local Hype Broadcaster Agent Schema
+export const SocialBroadcastPostSchema = z.object({
+  platform: z.enum(["WhatsApp Status", "Instagram Story", "Twitter / X", "SMS Alert"]),
+  headline: z.string().min(3),
+  body: z.string().min(10),
+  hashtags: z.array(z.string()),
+  shareableUrl: z.string(),
+});
+
+export const SocialBroadcastArraySchema = z.array(SocialBroadcastPostSchema);
+export type SocialBroadcastPostOutput = z.infer<typeof SocialBroadcastPostSchema>;
+
 /**
  * Universal safe parser and guardrail validator for LLM outputs.
  */

@@ -88,6 +88,10 @@ export default function BaristaKDSPage() {
   const [locationSaved, setLocationSaved] = useState(false);
   const [restockedFeedback, setRestockedFeedback] = useState(false);
   const [copiedPlatform, setCopiedPlatform] = useState<string | null>(null);
+  const [broadcastWeather, setBroadcastWeather] = useState<{ condition: string; tempC: number }>({
+    condition: "Warm Afternoon",
+    tempC: 31,
+  });
   const [isSentinelDrawerOpen, setIsSentinelDrawerOpen] = useState(false);
   const [quickRestockToast, setQuickRestockToast] = useState<string | null>(null);
 
@@ -2008,21 +2012,62 @@ export default function BaristaKDSPage() {
                 </span>
               </div>
 
+              {/* Weather Simulation / Ambient Selector */}
+              <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-black/40 border border-white/5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-[#8C7C70] uppercase tracking-wider">
+                    Ambient Context:
+                  </span>
+                  <span className="text-xs font-semibold text-white">
+                    {broadcastWeather.condition} ({broadcastWeather.tempC}°C)
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[
+                    { condition: "Warm Afternoon", tempC: 31, icon: "☀️", label: "Warm (31°)" },
+                    { condition: "Rainy Drizzle", tempC: 24, icon: "🌧️", label: "Rainy (24°)" },
+                    { condition: "Chilly Morning", tempC: 18, icon: "❄️", label: "Chilly (18°)" },
+                    { condition: "Breezy Evening", tempC: 26, icon: "🌆", label: "Evening (26°)" },
+                  ].map((w) => {
+                    const isSelected = broadcastWeather.condition === w.condition;
+                    return (
+                      <button
+                        key={w.condition}
+                        type="button"
+                        onClick={() => setBroadcastWeather({ condition: w.condition, tempC: w.tempC })}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-[#DFAB6C] text-[#140D08] shadow-sm"
+                            : "bg-white/5 hover:bg-white/10 text-[#C4B4A8] border border-white/5"
+                        }`}
+                      >
+                        {w.icon} {w.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {generateSocialBroadcast({
                   spotName: vanLocation.spotName,
                   city: vanLocation.city,
                   landmark: vanLocation.address,
-                  weatherCondition: "Warm Afternoon",
-                  tempC: 31,
+                  weatherCondition: broadcastWeather.condition,
+                  tempC: broadcastWeather.tempC,
                 }).map((post, idx) => (
                   <div
                     key={idx}
-                    className="p-4 rounded-2xl bg-black/40 border border-white/5 flex flex-col justify-between space-y-3"
+                    className="p-4 rounded-2xl bg-black/40 border border-white/5 flex flex-col justify-between space-y-3 hover:border-white/15 transition-all"
                   >
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[11px] font-bold text-white uppercase tracking-wider">
+                        <span className="text-[11px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                          {post.platform === "WhatsApp Status" && "🟢"}
+                          {post.platform === "Instagram Story" && "📸"}
+                          {post.platform === "Twitter / X" && "🐦"}
+                          {post.platform === "SMS Alert" && "💬"}
                           {post.platform}
                         </span>
                         <span className="text-[10px] text-[#8C7C70] font-mono">1-Click Blast</span>
@@ -2048,9 +2093,31 @@ export default function BaristaKDSPage() {
                             href={post.shareableUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-sm"
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-sm transition-all"
                           >
                             <span>Open WhatsApp</span>
+                          </a>
+                        )}
+
+                        {post.shareableUrl && post.platform === "Twitter / X" && (
+                          <a
+                            href={post.shareableUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-sm transition-all"
+                          >
+                            <span>Post to X</span>
+                          </a>
+                        )}
+
+                        {post.shareableUrl && post.platform === "Instagram Story" && (
+                          <a
+                            href={post.shareableUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 rounded-lg bg-pink-600/80 hover:bg-pink-600 text-white text-[11px] font-bold flex items-center gap-1 shadow-sm transition-all"
+                          >
+                            <span>Instagram</span>
                           </a>
                         )}
 
@@ -2063,12 +2130,12 @@ export default function BaristaKDSPage() {
                               setTimeout(() => setCopiedPlatform(null), 2500);
                             }
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold flex items-center gap-1 transition-all"
+                          className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer"
                         >
                           {copiedPlatform === post.platform ? (
                             <>
                               <Check className="w-3 h-3 text-emerald-400" />
-                              <span className="text-emerald-400">Copied!</span>
+                              <span className="text-emerald-400 font-bold">Copied!</span>
                             </>
                           ) : (
                             <>
