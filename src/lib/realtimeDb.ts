@@ -11,7 +11,7 @@ import {
   orderBy,
 } from "firebase/firestore";
 import type { VanOrder, VanLocation, FutureVanStop, OrderStatus } from "@/context/VanContext";
-import type { InventoryStock } from "@/lib/smartAgentsEngine";
+import type { InventoryStock, FlashDealConfig } from "@/lib/smartAgentsEngine";
 
 export interface RealtimeSyncHandlers {
   onInitialSync?: (data: {
@@ -20,6 +20,7 @@ export interface RealtimeSyncHandlers {
     vanLocation?: VanLocation;
     futureStops?: FutureVanStop[];
     curbsideArrivals?: Record<string, "approaching" | "arrived">;
+    flashDeal?: FlashDealConfig;
   }) => void;
   onOrderCreated?: (order: VanOrder) => void;
   onOrderStatusChanged?: (orderId: string, status: OrderStatus) => void;
@@ -27,6 +28,7 @@ export interface RealtimeSyncHandlers {
   onLocationChanged?: (location: Partial<VanLocation>) => void;
   onFutureStopsChanged?: (futureStops: FutureVanStop[]) => void;
   onCurbsideSignal?: (orderId: string, status: "approaching" | "arrived") => void;
+  onFlashDealChanged?: (flashDeal: FlashDealConfig) => void;
 }
 
 /**
@@ -83,6 +85,9 @@ export function initRealtimeCloudSync(handlers: RealtimeSyncHandlers): () => voi
             case "CURBSIDE_SIGNAL":
               if (handlers.onCurbsideSignal)
                 handlers.onCurbsideSignal(payload.orderId, payload.status);
+              break;
+            case "FLASH_DEAL_CHANGED":
+              if (handlers.onFlashDealChanged) handlers.onFlashDealChanged(payload);
               break;
             default:
               break;
@@ -284,3 +289,19 @@ export async function dispatchCloudCurbside(
     }
   }
 }
+
+/**
+ * Broadcasts Flash Deal updates (e.g. 1-tap activation, discounts, bundles)
+ */
+export async function dispatchCloudFlashDeal(flashDeal: FlashDealConfig): Promise<void> {
+  sendServerEvent("FLASH_DEAL_CHANGED", flashDeal);
+
+  if (db) {
+    try {
+      await setDoc(doc(db, "flash_deals", "active_deal"), flashDeal, { merge: true });
+    } catch {
+      // Fallback handled
+    }
+  }
+}
+

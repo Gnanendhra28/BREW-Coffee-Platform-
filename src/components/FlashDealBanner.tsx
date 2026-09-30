@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useVan } from "@/context/VanContext";
 import { useCart } from "@/context/CartContext";
 import { Zap, X, Check, ShoppingBag } from "lucide-react";
+import { analytics } from "@/lib/observability/analytics";
 
 export const FlashDealBanner: React.FC = () => {
   const pathname = usePathname();
@@ -25,6 +26,11 @@ export const FlashDealBanner: React.FC = () => {
       price: flashDeal.dealPrice,
       image: "/assets/cup1.webp",
       category: "Flash Special",
+    });
+    analytics.trackFlashDealClaimed({
+      id: flashDeal.id || "deal-pair-bundle",
+      title: flashDeal.title,
+      dealPrice: flashDeal.dealPrice,
     });
     setAdded(true);
     setTimeout(() => setAdded(false), 2500);

@@ -2,7 +2,12 @@
 // Enables instant (<500ms) sync across multiple phones, laptops, and outdoor displays.
 
 import type { VanOrder, VanLocation, FutureVanStop, OrderStatus } from "@/context/VanContext";
-import { type InventoryStock, DEFAULT_INVENTORY_STOCK } from "@/lib/smartAgentsEngine";
+import {
+  type InventoryStock,
+  DEFAULT_INVENTORY_STOCK,
+  type FlashDealConfig,
+  DEFAULT_FLASH_DEAL,
+} from "@/lib/smartAgentsEngine";
 
 export interface ServerRealtimeEvent {
   type:
@@ -12,6 +17,7 @@ export interface ServerRealtimeEvent {
     | "LOCATION_CHANGED"
     | "FUTURE_STOPS_CHANGED"
     | "CURBSIDE_SIGNAL"
+    | "FLASH_DEAL_CHANGED"
     | "INITIAL_SYNC";
   payload: unknown;
   timestamp: number;
@@ -25,6 +31,7 @@ interface ServerRealtimeState {
   vanLocation: VanLocation;
   futureStops: FutureVanStop[];
   curbsideArrivals: Record<string, string>;
+  flashDeal: FlashDealConfig;
   subscribers: Set<Subscriber>;
 }
 
@@ -104,6 +111,9 @@ if (!g[globalKey]) {
     curbsideArrivals: {
       "ord-103": "approaching",
     },
+    flashDeal: {
+      ...DEFAULT_FLASH_DEAL,
+    },
     subscribers: new Set(),
   };
 }
@@ -136,6 +146,8 @@ export function broadcastRealtimeEvent(event: ServerRealtimeEvent): void {
     store.orders = store.orders.map((o) =>
       o.id === orderId ? { ...o, curbsideArrivalStatus: status as "approaching" | "arrived" } : o
     );
+  } else if (event.type === "FLASH_DEAL_CHANGED") {
+    store.flashDeal = { ...store.flashDeal, ...(event.payload as Partial<FlashDealConfig>) };
   }
 
   // Broadcast to all active subscribers
@@ -155,5 +167,6 @@ export function getRealtimeServerSnapshot() {
     vanLocation: store.vanLocation,
     futureStops: store.futureStops,
     curbsideArrivals: store.curbsideArrivals,
+    flashDeal: store.flashDeal,
   };
 }

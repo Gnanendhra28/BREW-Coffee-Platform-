@@ -17,6 +17,7 @@ import {
   dispatchCloudLocation,
   dispatchCloudFutureStops,
   dispatchCloudCurbside,
+  dispatchCloudFlashDeal,
 } from "@/lib/realtimeDb";
 
 export type OrderStatus = "received" | "brewing" | "ready" | "served" | "cancelled";
@@ -328,6 +329,9 @@ export const VanProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (data.curbsideArrivals) {
           setCurbsideArrivals(data.curbsideArrivals);
         }
+        if (data.flashDeal) {
+          setFlashDeal(data.flashDeal);
+        }
       },
       onOrderCreated: (newOrder) => {
         setOrders((prev) => {
@@ -354,6 +358,9 @@ export const VanProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setOrders((prev) =>
           prev.map((o) => (o.id === orderId ? { ...o, curbsideArrivalStatus: status } : o))
         );
+      },
+      onFlashDealChanged: (deal) => {
+        setFlashDeal(deal);
       },
     });
 
@@ -427,15 +434,23 @@ export const VanProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const toggleFlashDeal = (active?: boolean) => {
-    setFlashDeal((prev) => ({
-      ...prev,
-      isActive: typeof active === "boolean" ? active : !prev.isActive,
-      expiresAt: Date.now() + 1000 * 60 * 60 * 2,
-    }));
+    setFlashDeal((prev) => {
+      const next = {
+        ...prev,
+        isActive: typeof active === "boolean" ? active : !prev.isActive,
+        expiresAt: Date.now() + 1000 * 60 * 60 * 2,
+      };
+      dispatchCloudFlashDeal(next);
+      return next;
+    });
   };
 
   const updateFlashDeal = (dealPatch: Partial<FlashDealConfig>) => {
-    setFlashDeal((prev) => ({ ...prev, ...dealPatch }));
+    setFlashDeal((prev) => {
+      const next = { ...prev, ...dealPatch };
+      dispatchCloudFlashDeal(next);
+      return next;
+    });
   };
 
   const updateCurbsideArrival = (orderId: string, status: "approaching" | "arrived") => {

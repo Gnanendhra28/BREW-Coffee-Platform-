@@ -202,8 +202,10 @@ export function analyzeStockDepletion(stock: InventoryStock): DepletionAlert[] {
   return alerts;
 }
 
+import { FlashDealSchema } from "./agentSchemas";
+
 // -------------------------------------------------------------
-// 2. FLASH DEAL & YIELD OPTIMIZER ENGINE
+// 2. FLASH DEAL & YIELD OPTIMIZER ENGINE (Agent #3)
 // -------------------------------------------------------------
 
 export const DEFAULT_FLASH_DEAL: FlashDealConfig = {
@@ -219,6 +221,135 @@ export const DEFAULT_FLASH_DEAL: FlashDealConfig = {
   dealPrice: 300,
   expiresAt: Date.now() + 1000 * 60 * 60 * 2, // 2 hrs from now
 };
+
+export const YIELD_PRESET_BUNDLES: FlashDealConfig[] = [
+  {
+    id: "deal-afternoon-combo",
+    isActive: true,
+    title: "☕ Late Afternoon Artisan Pair",
+    tagline: "Slow-roasted Single-Origin Cappuccino + Warm Cinnamon Roll",
+    discountPercent: 25,
+    triggerReason: "bakery_spoilage_prevention",
+    beverageName: "Cappuccino",
+    pastryName: "Cinnamon Roll",
+    originalPrice: 400,
+    dealPrice: 300,
+    expiresAt: Date.now() + 1000 * 60 * 60 * 2,
+  },
+  {
+    id: "deal-rainy-warmth",
+    isActive: true,
+    title: "🌧️ Rainy Afternoon Warmth Pair",
+    tagline: "Velvety Flat White + Fudgy Walnut Brownie",
+    discountPercent: 25,
+    triggerReason: "weather",
+    beverageName: "Flat White",
+    pastryName: "Walnut Brownie",
+    originalPrice: 380,
+    dealPrice: 285,
+    expiresAt: Date.now() + 1000 * 60 * 60 * 2,
+  },
+  {
+    id: "deal-sunset-chill",
+    isActive: true,
+    title: "🌅 Sunset Cold Brew & Croissant",
+    tagline: "18-hr Steeped Cold Brew + Buttery Almond Croissant",
+    discountPercent: 25,
+    triggerReason: "bakery_spoilage_prevention",
+    beverageName: "Cold Brew",
+    pastryName: "Almond Croissant",
+    originalPrice: 400,
+    dealPrice: 300,
+    expiresAt: Date.now() + 1000 * 60 * 60 * 2,
+  },
+];
+
+export interface YieldOpportunityAnalysis {
+  shouldTrigger: boolean;
+  reason: "weather" | "bakery_spoilage_prevention" | "manual";
+  recommendedBundle: FlashDealConfig;
+  projectedWasteSavedRupees: number;
+  explanation: string;
+}
+
+/**
+ * Evaluates real-time van telemetry (pastry inventory, hour of day, weather)
+ * to autonomously suggest or trigger a yield-maximizing flash bundle.
+ */
+export function evaluateYieldOpportunity(
+  inventory: InventoryStock,
+  currentHour: number = new Date().getHours(),
+  weatherCondition?: string
+): YieldOpportunityAnalysis {
+  const weatherLower = (weatherCondition || "").toLowerCase();
+  const isRainy =
+    weatherLower.includes("rain") ||
+    weatherLower.includes("drizzle") ||
+    weatherLower.includes("storm") ||
+    weatherLower.includes("thunder");
+
+  // Signal 1: Weather Slump (Foot traffic down, drive demand via cozy warm pair)
+  if (isRainy) {
+    return {
+      shouldTrigger: true,
+      reason: "weather",
+      recommendedBundle: YIELD_PRESET_BUNDLES[1],
+      projectedWasteSavedRupees: Math.max(12, inventory.bakeryPastries) * 140,
+      explanation: "Rain detected near van: street foot traffic dips ~35%. Auto-pulsed warm bundle to drive digital orders.",
+    };
+  }
+
+  // Signal 2: Bakery Spoilage Prevention (Past 3:00 PM with unsold pastries)
+  if (inventory.bakeryPastries > 6 && (currentHour >= 15 || currentHour <= 6)) {
+    return {
+      shouldTrigger: true,
+      reason: "bakery_spoilage_prevention",
+      recommendedBundle: YIELD_PRESET_BUNDLES[0],
+      projectedWasteSavedRupees: inventory.bakeryPastries * 180,
+      explanation: `${inventory.bakeryPastries} fresh pastries remaining past 3:30 PM. Bundling with high-margin Cappuccino converts potential spoilage into ₹${inventory.bakeryPastries * 300} gross revenue.`,
+    };
+  }
+
+  // Normal traffic / healthy margins
+  return {
+    shouldTrigger: false,
+    reason: "manual",
+    recommendedBundle: DEFAULT_FLASH_DEAL,
+    projectedWasteSavedRupees: 0,
+    explanation: "Inventory burn rate and street foot traffic are optimal. Flash deal remains primed for manual barista launch.",
+  };
+}
+
+/**
+ * Generates and validates a new custom flash deal with Zod schema verification
+ */
+export function generateYieldFlashDeal(params: {
+  beverageName: string;
+  pastryName: string;
+  originalPrice: number;
+  discountPercent?: number;
+  triggerReason?: "weather" | "bakery_spoilage_prevention" | "manual";
+}): FlashDealConfig {
+  const discount = params.discountPercent ?? 25;
+  const dealPrice = Math.round(params.originalPrice * (1 - discount / 100));
+
+  const rawDeal = {
+    id: `deal-${Date.now()}`,
+    isActive: true,
+    title: `⚡ ${params.beverageName} + ${params.pastryName} Flash Pair`,
+    tagline: `Fresh artisanal pairing · Limited ${discount}% OFF yield bundle`,
+    discountPercent: discount,
+    triggerReason: params.triggerReason || "manual",
+    beverageName: params.beverageName,
+    pastryName: params.pastryName,
+    originalPrice: params.originalPrice,
+    dealPrice,
+    expiresAt: Date.now() + 1000 * 60 * 60 * 2,
+  };
+
+  // Enforce runtime Zod schema compliance
+  return FlashDealSchema.parse(rawDeal) as FlashDealConfig;
+}
 
 // -------------------------------------------------------------
 // 3. CORPORATE EVENT CONCIERGE ENGINE

@@ -39,6 +39,8 @@ import { BaristaOpsAssistant } from "@/components/BaristaOpsAssistant";
 import {
   analyzeStockDepletion,
   generateSocialBroadcast,
+  evaluateYieldOpportunity,
+  YIELD_PRESET_BUNDLES,
 } from "@/lib/smartAgentsEngine";
 
 export default function BaristaKDSPage() {
@@ -58,6 +60,7 @@ export default function BaristaKDSPage() {
     restockInventory,
     flashDeal,
     toggleFlashDeal,
+    updateFlashDeal,
     curbsideArrivals,
   } = useVan();
 
@@ -399,6 +402,21 @@ export default function BaristaKDSPage() {
             <span>Outdoor Board</span>
             <ExternalLink className="w-3 h-3" />
           </Link>
+
+          {/* Flash Deal 1-Tap Toggle */}
+          <button
+            type="button"
+            onClick={() => toggleFlashDeal()}
+            className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
+              flashDeal.isActive
+                ? "bg-amber-500/20 border-amber-500/50 text-amber-300 hover:bg-amber-500/30 ring-1 ring-amber-400"
+                : "bg-white/5 hover:bg-white/10 border-white/10 text-stone-400"
+            }`}
+            title={flashDeal.isActive ? "Flash Deal Live (Click to Pause)" : "Flash Deal Paused (Click to Activate)"}
+          >
+            <Zap className={`w-3.5 h-3.5 ${flashDeal.isActive ? "text-amber-400 fill-amber-400 animate-pulse" : "text-stone-400"}`} />
+            <span className="hidden lg:inline">{flashDeal.isActive ? `Flash Deal ON (${flashDeal.discountPercent}%)` : "Flash Deal OFF"}</span>
+          </button>
 
           {/* Inventory Sentinel Drawer Trigger */}
           <button
@@ -1802,7 +1820,7 @@ export default function BaristaKDSPage() {
             </div>
 
             {/* AGENT #3: YIELD OPTIMIZER / FLASH SPECIAL MANAGER */}
-            <div className="p-6 rounded-3xl bg-[#22160F] border border-amber-500/30 shadow-xl space-y-4">
+            <div className="p-6 rounded-3xl bg-[#22160F] border border-amber-500/30 shadow-xl space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/5">
                 <div className="flex items-center gap-2.5">
                   <span className="p-2 rounded-xl bg-amber-500/10 text-amber-300 border border-amber-500/20">
@@ -1810,10 +1828,10 @@ export default function BaristaKDSPage() {
                   </span>
                   <div>
                     <h2 className="text-base font-bold text-white uppercase tracking-wider font-sans">
-                      Yield Optimizer — Flash Specials &amp; Bakery Waste Prevention
+                      Agent #3: Yield Optimizer (Flash Deals Engine)
                     </h2>
                     <p className="text-xs text-[#8C7C70]">
-                      Broadcasts an instant 25% discount bundle banner across the website to accelerate afternoon pastry sales.
+                      Prevents perishable pastry spoilage &amp; lifts late-afternoon AOV by bundling high-margin drinks.
                     </p>
                   </div>
                 </div>
@@ -1837,12 +1855,112 @@ export default function BaristaKDSPage() {
                         : "bg-[#DFAB6C] hover:bg-white text-[#1A110B]"
                     }`}
                   >
-                    {flashDeal.isActive ? "Pause Flash Deal" : "Activate Flash Bundle"}
+                    {flashDeal.isActive ? "Pause Flash Deal" : "⚡ Activate Flash Bundle"}
                   </button>
                 </div>
               </div>
 
-              {/* Deal Card Preview */}
+              {/* Real-time Telemetry & Trigger Signals */}
+              {(() => {
+                const analysis = evaluateYieldOpportunity(inventory);
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="p-3 rounded-2xl bg-black/40 border border-white/5 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#8C7C70]">
+                          Trigger Signals
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                          {flashDeal.triggerReason === "weather"
+                            ? "🌧️ Weather Shift"
+                            : flashDeal.triggerReason === "bakery_spoilage_prevention"
+                            ? "🥐 Spoilage Sentry"
+                            : "⚡ Manual Push"}
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold text-white">
+                        {analysis.shouldTrigger ? "High Yield Window Active" : "Standard Street Traffic"}
+                      </p>
+                      <p className="text-[11px] text-[#A8988B] line-clamp-2">
+                        {analysis.explanation}
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-black/40 border border-white/5 space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#8C7C70]">
+                        Pastry Spoilage Risk
+                      </span>
+                      <p className="text-xs font-semibold text-amber-300">
+                        {inventory.bakeryPastries} Pastries Left in Storage
+                      </p>
+                      <p className="text-[11px] text-[#A8988B]">
+                        Zero waste target: {inventory.bakeryPastries <= 6 ? "Safe" : "Requires afternoon bundling discount"}
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-black/40 border border-white/5 space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#8C7C70]">
+                        Projected Impact
+                      </span>
+                      <p className="text-xs font-semibold text-emerald-400 font-mono">
+                        +33% AOV Lift · Zero Waste
+                      </p>
+                      <p className="text-[11px] text-[#A8988B]">
+                        Converts ₹{inventory.bakeryPastries * 180} potential waste to ₹{inventory.bakeryPastries * 300} revenue
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Preset Bundle Selector */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#8C7C70]">
+                  Select Yield Bundle Preset:
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {YIELD_PRESET_BUNDLES.map((preset) => {
+                    const isSelected =
+                      flashDeal.beverageName === preset.beverageName &&
+                      flashDeal.pastryName === preset.pastryName;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          updateFlashDeal({
+                            title: preset.title,
+                            tagline: preset.tagline,
+                            beverageName: preset.beverageName,
+                            pastryName: preset.pastryName,
+                            originalPrice: preset.originalPrice,
+                            dealPrice: preset.dealPrice,
+                            discountPercent: preset.discountPercent,
+                            triggerReason: preset.triggerReason,
+                          });
+                        }}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-amber-500/15 border-amber-400 text-white ring-1 ring-amber-400/50 shadow-md"
+                            : "bg-black/30 border-white/5 text-[#C4B4A8] hover:bg-white/5 hover:text-white"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-white truncate">
+                            {preset.beverageName} + {preset.pastryName}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold text-[#DFAB6C]">
+                            ₹{preset.dealPrice}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-[#8C7C70] truncate">{preset.title}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Live Customer Top Banner Preview */}
               <div className="p-4 rounded-2xl bg-black/40 border border-white/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
@@ -1853,7 +1971,7 @@ export default function BaristaKDSPage() {
                   </div>
                   <p className="text-xs text-[#C4B4A8]">{flashDeal.tagline}</p>
                   <p className="text-[11px] text-[#8C7C70]">
-                    Bundle: <strong>{flashDeal.beverageName}</strong> + <strong>{flashDeal.pastryName}</strong>
+                    Active Combo: <strong>{flashDeal.beverageName}</strong> + <strong>{flashDeal.pastryName}</strong>
                   </p>
                 </div>
 
