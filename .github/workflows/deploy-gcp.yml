@@ -8,6 +8,7 @@ on:
 jobs:
   deploy-to-gcp:
     name: 🚀 Build & Deploy to Cloud Run
+    if: ${{ secrets.GCP_SA_KEY != '' }}
     runs-on: ubuntu-latest
 
     permissions:
@@ -20,7 +21,6 @@ jobs:
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
-        if: env.GCP_SA_KEY != ''
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
