@@ -3,7 +3,7 @@ import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
 import { getAnalytics, isSupported, type Analytics } from "firebase/analytics";
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "placeholder-dummy-key-for-static-prerender",
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "brew-2621e.firebaseapp.com",
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "brew-2621e",
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "brew-2621e.firebasestorage.app",
@@ -14,9 +14,9 @@ const firebaseConfig = {
 
 // Check if valid credentials are provided
 export const isFirebaseConfigured = Boolean(
-  firebaseConfig.apiKey &&
-  firebaseConfig.apiKey.length > 20 &&
-  firebaseConfig.projectId
+  process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
+  process.env.NEXT_PUBLIC_FIREBASE_API_KEY !== "placeholder-dummy-key-for-static-prerender" &&
+  process.env.NEXT_PUBLIC_FIREBASE_API_KEY.length > 20
 );
 
 let app: FirebaseApp;

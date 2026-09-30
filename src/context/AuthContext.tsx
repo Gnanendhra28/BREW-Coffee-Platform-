@@ -106,26 +106,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // 3. Listen for Firebase Auth state changes
-      try {
-        unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-          if (firebaseUser) {
-            const appUser: AppUser = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: firebaseUser.displayName,
-              photoURL: firebaseUser.photoURL,
-              role: "customer",
-              isDemo: false,
-            };
-            setUser(appUser);
-            await syncSessionCookie(appUser);
-          } else {
-            setUser((currentUser) => (currentUser?.isDemo ? currentUser : null));
-          }
+      if (isFirebaseConfigured && auth) {
+        try {
+          unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+            if (firebaseUser) {
+              const appUser: AppUser = {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email,
+                displayName: firebaseUser.displayName,
+                photoURL: firebaseUser.photoURL,
+                role: "customer",
+                isDemo: false,
+              };
+              setUser(appUser);
+              await syncSessionCookie(appUser);
+            } else {
+              setUser((currentUser) => (currentUser?.isDemo ? currentUser : null));
+            }
+            setLoading(false);
+          });
+        } catch (err) {
+          console.warn("Firebase Auth listener initialized with fallback", err);
           setLoading(false);
-        });
-      } catch (err) {
-        console.warn("Firebase Auth listener initialized with fallback", err);
+        }
+      } else {
         setLoading(false);
       }
     };
