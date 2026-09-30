@@ -109,6 +109,19 @@ export const SocialBroadcastPostSchema = z.object({
 export const SocialBroadcastArraySchema = z.array(SocialBroadcastPostSchema);
 export type SocialBroadcastPostOutput = z.infer<typeof SocialBroadcastPostSchema>;
 
+// 6. Guest Sentiment Guardian Agent Schema
+export const ReviewRecoveryNoticeSchema = z.object({
+  customerName: z.string().min(1),
+  rating: z.number().int().min(1).max(3),
+  sentiment: z.enum(["negative", "mixed"]),
+  detectedIssues: z.array(z.string()).min(1),
+  managerApologyText: z.string().min(20),
+  voucherCode: z.string().regex(/^BREWCARE\d{4}$/, "Must be a valid BREWCARE voucher code"),
+  discountAmount: z.number().positive(),
+});
+
+export type ReviewRecoveryNoticeOutput = z.infer<typeof ReviewRecoveryNoticeSchema>;
+
 /**
  * Universal safe parser and guardrail validator for LLM outputs.
  */

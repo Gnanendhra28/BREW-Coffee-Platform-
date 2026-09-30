@@ -202,7 +202,7 @@ export function analyzeStockDepletion(stock: InventoryStock): DepletionAlert[] {
   return alerts;
 }
 
-import { FlashDealSchema, EventQuotationSchema, SocialBroadcastArraySchema } from "./agentSchemas";
+import { FlashDealSchema, EventQuotationSchema, SocialBroadcastArraySchema, ReviewRecoveryNoticeSchema } from "./agentSchemas";
 
 // -------------------------------------------------------------
 // 2. FLASH DEAL & YIELD OPTIMIZER ENGINE (Agent #3)
@@ -512,7 +512,7 @@ export function analyzeReviewSentiment(review: {
 
   const voucherCode = `BREWCARE${Math.floor(1000 + Math.random() * 9000)}`;
 
-  return {
+  const notice: ReviewRecoveryNotice = {
     customerName: review.name || "Valued Guest",
     rating: review.rating,
     sentiment: review.rating <= 2 ? "negative" : "mixed",
@@ -521,4 +521,6 @@ export function analyzeReviewSentiment(review: {
     voucherCode,
     discountAmount: 50,
   };
+
+  return ReviewRecoveryNoticeSchema.parse(notice);
 }

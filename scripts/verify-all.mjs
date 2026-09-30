@@ -11,6 +11,7 @@ const testSuites = [
   { name: "Yield Optimizer: Flash Deals & Waste Prevention Engine", script: "scripts/verify-yield-optimizer.mjs" },
   { name: "Event Booking Concierge: Instant 3-Tier Catering Engine", script: "scripts/verify-event-concierge.mjs" },
   { name: "Hyper-Local Hype Broadcaster: Multi-Channel Traffic Generator", script: "scripts/verify-hype-broadcaster.mjs" },
+  { name: "Guest Sentiment Guardian: Real-Time Retention & Voucher Engine", script: "scripts/verify-sentiment-guardian.mjs" },
   { name: "Phase 2: Authentication & RBAC Edge Security", script: "scripts/verify-auth.mjs" },
   { name: "Phase 3: Payments Gateway & WhatsApp Receipts", script: "scripts/verify-payments.mjs" },
   { name: "Phase 4: Web Push Notifications & Hardware Buzzer", script: "scripts/verify-buzzer.mjs" },
