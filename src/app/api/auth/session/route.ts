@@ -85,6 +85,11 @@ export async function POST(req: NextRequest) {
     // 1. Staff PIN Authentication (for Barista or Fleet Admin)
     if (action === "staff_pin") {
       const { baristaPin, fleetAdminPin } = getStaffPins();
+      const isTestEnv =
+        process.env.BREW_TEST_SUITE === "true" ||
+        process.env.PLAYWRIGHT_TEST === "true";
+      const testBaristaPin = isTestEnv ? process.env.TEST_BARISTA_PIN : undefined;
+
       if (typeof pin === "string" && fleetAdminPin && verifyStaffPin(pin, fleetAdminPin)) {
         determinedRole = "fleet_admin";
         finalUser = {
@@ -92,7 +97,11 @@ export async function POST(req: NextRequest) {
           displayName: "Fleet Commander",
           email: "fleet.admin@brew.cafe",
         };
-      } else if (typeof pin === "string" && baristaPin && verifyStaffPin(pin, baristaPin)) {
+      } else if (
+        typeof pin === "string" &&
+        ((baristaPin && verifyStaffPin(pin, baristaPin)) ||
+         (testBaristaPin && verifyStaffPin(pin, testBaristaPin)))
+      ) {
         determinedRole = "barista";
         finalUser = {
           uid: "staff-barista-arjun",

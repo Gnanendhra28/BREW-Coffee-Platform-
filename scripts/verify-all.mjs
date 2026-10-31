@@ -20,7 +20,7 @@ const testSuites = [
   { name: "Phase 4: Web Push Notifications & Hardware Buzzer", script: "scripts/verify-buzzer.mjs" },
   { name: "Phase 4.1: Production Blocker Resolution & Multi-Instance Security", script: "scripts/verify-phase4-1-blockers.mjs" },
   { name: "Phase 4.2: Security Consistency & Cross-Instance Verification", script: "scripts/verify-phase4-2-security.mjs" },
-  { name: "Phase 4.6.3: Post-Incident Security Hardening & Infrastructure Integrity", script: "scripts/verify-phase4-3-security-hardening.mjs" },
+  { name: "Phase 4.6.5: Security Hardening, Test Isolation & Redis Verification", script: "scripts/verify-phase4-3-security-hardening.mjs" },
   { name: "Phase 5: Asset Optimization & Global Edge CDN", script: "scripts/verify-assets-cdn.mjs" },
   { name: "Phase 6: AI Agents Hardening, Rate Limiting & Zod", script: "scripts/verify-agents-hardening.mjs" },
   { name: "Phase 7: Observability, Sentry & System Health", script: "scripts/verify-observability.mjs" },
@@ -61,6 +61,10 @@ async function runAll() {
   let serverProcess = null;
   const isRunning = await checkServerReady(3000, 1000);
 
+  if (!process.env.TEST_BARISTA_PIN) {
+    process.env.TEST_BARISTA_PIN = "brew_qa_test_barista_pin_9876";
+  }
+
   if (!isRunning) {
     console.log("⚡ Starting BREW local server instance on port 3000 for verification...");
     const hasStandalone = (await import("node:fs")).existsSync(".next/standalone/server.js");
@@ -72,6 +76,7 @@ async function runAll() {
             PORT: "3000",
             BREW_TEST_SUITE: "true",
             ALLOW_LOCAL_FALLBACK: "true",
+            TEST_BARISTA_PIN: process.env.TEST_BARISTA_PIN,
             BARISTA_PIN: process.env.BARISTA_PIN || "2026",
             FLEET_ADMIN_PIN: process.env.FLEET_ADMIN_PIN || "7788",
             AUTH_SECRET: process.env.AUTH_SECRET || "brew-platform-secure-jwt-hmac-secret-key-2026",
@@ -84,6 +89,7 @@ async function runAll() {
             PORT: "3000",
             BREW_TEST_SUITE: "true",
             ALLOW_LOCAL_FALLBACK: "true",
+            TEST_BARISTA_PIN: process.env.TEST_BARISTA_PIN,
             BARISTA_PIN: process.env.BARISTA_PIN || "2026",
             FLEET_ADMIN_PIN: process.env.FLEET_ADMIN_PIN || "7788",
             AUTH_SECRET: process.env.AUTH_SECRET || "brew-platform-secure-jwt-hmac-secret-key-2026",

@@ -1,5 +1,5 @@
 // ==============================================================================
-// BREW PLATFORM — PHASE 4.6.4: SECURITY TEST INTEGRITY & INFRASTRUCTURE TESTS
+// BREW PLATFORM — PHASE 4.6.5: FINAL TEST ISOLATION & LIVE REDIS VERIFICATION
 // ==============================================================================
 
 import assert from "node:assert/strict";
@@ -70,8 +70,22 @@ function waitForServer(port, timeoutMs = 8000) {
 
 async function runSecurityHardeningVerification() {
   console.log("===============================================================");
-  console.log("🛡️  BREW PHASE 4.6.4: SECURITY TEST INTEGRITY & INFRASTRUCTURE");
+  console.log("🛡️  BREW PHASE 4.6.5: FINAL TEST ISOLATION & LIVE REDIS VERIFICATION");
   console.log("===============================================================");
+
+  // Mandatory Test Variable Isolation Gate (Requirement: Fail immediately if missing)
+  const activeTestBaristaPin = process.env.TEST_BARISTA_PIN;
+  if (!activeTestBaristaPin) {
+    throw new Error(
+      "[TEST ISOLATION CRITICAL] Missing mandatory TEST_BARISTA_PIN environment variable! " +
+      "Automated tests must never fall back to development defaults (2026) or use production PINs."
+    );
+  }
+  assert(
+    activeTestBaristaPin !== "2026" && activeTestBaristaPin !== "7788",
+    "[SECURITY INTEGRITY CRITICAL] TEST_BARISTA_PIN cannot be development PINs (2026, 7788). " +
+    "A dedicated, unique test credential must be injected into the test environment."
+  );
 
   const mainPort = process.env.PORT || 3000;
   const baseUrl = "127.0.0.1";
@@ -194,8 +208,7 @@ async function runSecurityHardeningVerification() {
   assert.equal(privEscRes.statusCode, 403, "Self-assigned staff role must be rejected with 403");
   console.log("   ✓ Privilege escalation strictly blocked with 403 Forbidden");
 
-  // 4c. Valid staff authentication using test-injected credentials
-  const activeTestBaristaPin = process.env.BARISTA_PIN || "2026";
+  // 4c. Valid staff authentication using mandatory isolated test credential
   const validBaristaRes = await makeRequest(
     { hostname: baseUrl, port: mainPort, path: "/api/auth/session", method: "POST", headers: { "x-forwarded-for": "10.46.4.12" } },
     JSON.stringify({ action: "staff_pin", pin: activeTestBaristaPin })
@@ -252,7 +265,7 @@ async function runSecurityHardeningVerification() {
   try {
     await waitForServer(prodPort, 8000);
 
-    // Test all 4 sensitive endpoints on the isolated production instance:
+    // Test all 4 sensitive endpoints on the isolated production instance (Missing Credentials):
     // 1. /api/auth/session
     const authRes = await makeRequest(
       { hostname: baseUrl, port: prodPort, path: "/api/auth/session", method: "POST" },
@@ -282,30 +295,78 @@ async function runSecurityHardeningVerification() {
     );
     assert.equal(eventRes.statusCode, 503, "/api/realtime/events must fail-closed with 503 in production without Redis");
 
-    console.log("   ✓ Verified all 4 sensitive endpoints fail-closed with HTTP 503 in production without Redis");
+    console.log("   ✓ Verified all 4 sensitive endpoints fail-closed with HTTP 503 when Redis credentials missing");
     console.log("   ✓ Verified ALLOW_LOCAL_FALLBACK=true is strictly ignored in production (zero bypass)");
   } finally {
     prodServer.kill();
   }
 
   // --------------------------------------------------------------------------
-  // TEST 6: Atomic Redis Lua Script Execution & Live Gateway Integration
+  // TEST 5b: Production Fail-Closed on Redis OUTAGE (Unreachable Host / Port)
   // --------------------------------------------------------------------------
-  console.log("\n[Test 6] Testing Atomic Upstash Redis Rate Limiting & Lua Contract...");
+  console.log(`\n   -> Spawning isolated production server on port ${prodPort} (Redis OUTAGE simulation)...`);
+  const outageProdEnv = { ...cleanProdEnv };
+  // Port 1 on 127.0.0.1 will immediately trigger ECONNREFUSED
+  outageProdEnv.UPSTASH_REDIS_REST_URL = "http://127.0.0.1:1";
+  outageProdEnv.UPSTASH_REDIS_REST_TOKEN = "unreachable_token";
+
+  const outageServer = spawn("node", [".next/standalone/server.js"], {
+    env: outageProdEnv,
+    stdio: "pipe",
+  });
+
+  try {
+    await waitForServer(prodPort, 8000);
+
+    const outageAuth = await makeRequest(
+      { hostname: baseUrl, port: prodPort, path: "/api/auth/session", method: "POST" },
+      JSON.stringify({ action: "staff_pin", pin: "test" })
+    );
+    assert.equal(outageAuth.statusCode, 503, "/api/auth/session must return 503 during Redis outage");
+
+    const outageOrder = await makeRequest(
+      { hostname: baseUrl, port: prodPort, path: "/api/payments/create-order", method: "POST" },
+      JSON.stringify({ items: [{ id: "c-1", quantity: 1 }] })
+    );
+    assert.equal(outageOrder.statusCode, 503, "/api/payments/create-order must return 503 during Redis outage");
+
+    const outageVan = await makeRequest(
+      { hostname: baseUrl, port: prodPort, path: "/api/request-van", method: "POST" },
+      JSON.stringify({ contact: "test@corp.in" })
+    );
+    assert.equal(outageVan.statusCode, 503, "/api/request-van must return 503 during Redis outage");
+
+    const outageEvent = await makeRequest(
+      { hostname: baseUrl, port: prodPort, path: "/api/realtime/events", method: "POST" },
+      JSON.stringify({ type: "ORDER_CREATED", payload: {} })
+    );
+    assert.equal(outageEvent.statusCode, 503, "/api/realtime/events must return 503 during Redis outage");
+
+    console.log("   ✓ Verified all 4 sensitive endpoints fail-closed with HTTP 503 during simulated Redis outage");
+  } finally {
+    outageServer.kill();
+  }
+
+  // --------------------------------------------------------------------------
+  // TEST 6: Atomic Upstash Redis Rate Limiting & Lua Contract (Mock Integration)
+  // --------------------------------------------------------------------------
+  console.log("\n[Test 6] Testing Atomic Upstash Redis Rate Limiting (Mock Integration)...");
 
   let serverReceivedScript = "";
-  let requestCounter = 0;
+  const keyCounters = new Map();
 
   const mockRedisServer = http.createServer((req, res) => {
     let body = "";
     req.on("data", (chunk) => (body += chunk));
     req.on("end", () => {
       if (req.url === "/eval") {
-        requestCounter++;
         const payload = JSON.parse(body);
         serverReceivedScript = payload.script;
+        const key = payload.keys?.[0] || "default_key";
+        const current = (keyCounters.get(key) || 0) + 1;
+        keyCounters.set(key, current);
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ result: [requestCounter, 60] }));
+        res.end(JSON.stringify({ result: [current, 60] }));
       } else {
         res.writeHead(404);
         res.end();
@@ -330,30 +391,106 @@ async function runSecurityHardeningVerification() {
   try {
     await waitForServer(redisProdPort, 8000);
 
-    // Call /api/auth/session with invalid PIN (rate limiter will invoke Redis /eval Lua script)
+    // Call 1: verify operational Redis allows request through to auth validation
     const activeRedisRes = await makeRequest(
-      { hostname: baseUrl, port: redisProdPort, path: "/api/auth/session", method: "POST" },
+      { hostname: baseUrl, port: redisProdPort, path: "/api/auth/session", method: "POST", headers: { "x-forwarded-for": "10.46.5.1" } },
       JSON.stringify({ action: "staff_pin", pin: "0000" })
     );
 
-    // Rate limiter allowed the request to proceed to PIN verification, returning 401 instead of 503!
     assert.equal(activeRedisRes.statusCode, 401, "Rate limiter permitted request through operational Redis to auth validation");
     assert(serverReceivedScript.includes("redis.call('INCR'"), "Must execute atomic INCR in Lua script");
     assert(serverReceivedScript.includes("redis.call('EXPIRE'"), "Must execute conditional EXPIRE in Lua script");
     assert(serverReceivedScript.includes("redis.call('TTL'"), "Must execute atomic TTL in Lua script");
     console.log("   ✓ Verified operational Redis permits sensitive requests without 503");
     console.log("   ✓ Verified atomic Lua script contract (/eval with INCR, conditional EXPIRE, TTL)");
+
+    // Multiple requests sharing the same Redis counter:
+    // Make 3 additional requests from the same IP (10.46.5.1) and verify the Redis counter increases
+    const clientKey = "ratelimit:auth-session:10.46.5.1";
+    for (let i = 0; i < 3; i++) {
+      await makeRequest(
+        { hostname: baseUrl, port: redisProdPort, path: "/api/auth/session", method: "POST", headers: { "x-forwarded-for": "10.46.5.1" } },
+        JSON.stringify({ action: "staff_pin", pin: "0000" })
+      );
+    }
+    const finalCount = keyCounters.get(clientKey);
+    assert(finalCount >= 4, `Redis shared counter must be >= 4, actual: ${finalCount}`);
+    console.log(`   ✓ Verified multiple requests share the same Redis counter (current count: ${finalCount})`);
+
+    // Verify rate limit enforcement when counter exceeds limit:
+    // Set counter to 16 (> limit of 15 for /api/auth/session)
+    keyCounters.set("ratelimit:auth-session:10.46.5.99", 16);
+    const blockedRes = await makeRequest(
+      { hostname: baseUrl, port: redisProdPort, path: "/api/auth/session", method: "POST", headers: { "x-forwarded-for": "10.46.5.99" } },
+      JSON.stringify({ action: "staff_pin", pin: "0000" })
+    );
+    assert.equal(blockedRes.statusCode, 429, "Exceeded rate limit must return HTTP 429 Too Many Requests");
+    console.log("   ✓ Verified rate-limit enforcement across independent requests (HTTP 429 returned)");
   } finally {
     redisServer.kill();
     mockRedisServer.close();
   }
 
+  // --------------------------------------------------------------------------
+  // TEST 7: Real Cloud Upstash Redis Verification (Live Network Audit)
+  // --------------------------------------------------------------------------
+  console.log("\n[Test 7] Testing Real Cloud Upstash Connectivity & REST Verification...");
+  const realCloudUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const realCloudToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (realCloudUrl && realCloudToken && !realCloudUrl.includes("127.0.0.1") && !realCloudUrl.includes("localhost")) {
+    console.log("   -> Real cloud Upstash credentials detected in environment. Performing live cloud audit...");
+    try {
+      const pingRes = await fetch(`${realCloudUrl}/ping`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${realCloudToken}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      assert(pingRes.ok, `Real Upstash REST /ping returned HTTP ${pingRes.status}`);
+      const pingData = await pingRes.json();
+      assert.equal(pingData.result, "PONG", "Real Upstash REST must respond with PONG");
+      console.log("   ✓ [Real Cloud Upstash] Direct REST connectivity confirmed (PONG received)");
+
+      // Test atomic Lua execution on an ephemeral test key
+      const testKey = `brew:qa:test:${Date.now()}`;
+      const evalRes = await fetch(`${realCloudUrl}/eval`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${realCloudToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          script: "local c = redis.call('INCR', KEYS[1]); redis.call('EXPIRE', KEYS[1], 10); return c;",
+          keys: [testKey],
+          args: [],
+        }),
+        signal: AbortSignal.timeout(5000),
+      });
+      assert(evalRes.ok, `Real Upstash /eval returned HTTP ${evalRes.status}`);
+      const evalData = await evalRes.json();
+      assert.equal(evalData.result, 1, "Real Upstash atomic Lua execution returned expected counter");
+      console.log("   ✓ [Real Cloud Upstash] Atomic Lua execution verified on cloud database");
+
+      // Cleanup test key
+      await fetch(`${realCloudUrl}/del/${testKey}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${realCloudToken}` },
+      });
+    } catch (cloudErr) {
+      console.error("   ✖ [Real Cloud Upstash] Live cloud verification failed:", cloudErr.message);
+      throw cloudErr;
+    }
+  } else {
+    console.log("   ℹ [Real Cloud Upstash] UPSTASH_REDIS_REST_URL not configured in local environment.");
+    console.log("     (Note: Production Render deployment must configure UPSTASH_REDIS_REST_URL via dashboard)");
+  }
+
   console.log("\n===============================================================");
-  console.log("🎉 ALL PHASE 4.6.4 SECURITY TEST INTEGRITY CHECKS PASSED!");
+  console.log("🎉 ALL PHASE 4.6.5 SECURITY TEST INTEGRITY CHECKS PASSED!");
   console.log("===============================================================\n");
 }
 
 runSecurityHardeningVerification().catch((err) => {
-  console.error("\n❌ PHASE 4.6.4 VERIFICATION FAILED:", err);
+  console.error("\n❌ PHASE 4.6.5 VERIFICATION FAILED:", err);
   process.exit(1);
 });
