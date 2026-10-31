@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build --webpack",
+    "build": "NODE_OPTIONS='--max-old-space-size=1536' next build --webpack",
     "postbuild": "node -e \"const fs = require('fs'); if (fs.existsSync('.next/standalone')) { fs.cpSync('public', '.next/standalone/public', { recursive: true }); fs.cpSync('.next/static', '.next/standalone/.next/static', { recursive: true }); }\"",
     "start": "next start",
     "start:standalone": "node --max-old-space-size=450 .next/standalone/server.js",
