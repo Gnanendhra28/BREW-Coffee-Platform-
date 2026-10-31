@@ -2,7 +2,7 @@
 // Monitored by BetterStack, UptimeRobot, or Datadog for automated van uptime alerts.
 
 import { NextResponse } from "next/server";
-import { getAgentCacheStats } from "@/lib/agentCache";
+import { getAgentCacheStats } from "../../../lib/agentCache";
 
 export const dynamic = "force-dynamic";
 

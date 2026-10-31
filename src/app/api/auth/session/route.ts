@@ -4,9 +4,9 @@ import {
   verifySessionToken,
   getStaffPins,
   UserRole,
-} from "@/lib/authTokens";
-import { revokeSession, isSessionRevoked } from "@/lib/sessionRevocation";
-import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
+} from "../../../../lib/authTokens";
+import { revokeSession, isSessionRevoked } from "../../../../lib/sessionRevocation";
+import { checkRateLimit, getClientIp } from "../../../../lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 

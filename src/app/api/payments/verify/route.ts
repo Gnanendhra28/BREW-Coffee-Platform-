@@ -5,7 +5,7 @@ import {
   markStoredPaymentOrderPaid,
   isPaymentIdProcessed,
   markPaymentIdProcessed,
-} from "@/lib/serverPaymentStore";
+} from "../../../../lib/serverPaymentStore";
 
 export const dynamic = "force-dynamic";
 

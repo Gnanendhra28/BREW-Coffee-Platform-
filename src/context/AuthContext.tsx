@@ -10,8 +10,8 @@ import {
   sendPasswordResetEmail,
   updateProfile,
 } from "firebase/auth";
-import { auth, googleProvider, isFirebaseConfigured } from "@/lib/firebase";
-import type { UserRole } from "@/lib/authTokens";
+import { auth, googleProvider, isFirebaseConfigured } from "../lib/firebase";
+import type { UserRole } from "../lib/authTokens";
 
 export interface AppUser {
   uid: string;

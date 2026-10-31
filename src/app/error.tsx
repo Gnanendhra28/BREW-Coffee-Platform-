@@ -2,7 +2,7 @@
 
 import React, { useEffect } from "react";
 import { AlertCircle, RotateCcw } from "lucide-react";
-import { sentry } from "@/lib/observability/sentry";
+import { sentry } from "../lib/observability/sentry";
 
 export default function RouteError({
   error,

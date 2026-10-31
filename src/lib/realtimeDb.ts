@@ -1,6 +1,6 @@
 "use client";
 
-import { db } from "@/lib/firebase";
+import { db } from "./firebase";
 import {
   collection,
   doc,
@@ -11,7 +11,7 @@ import {
   orderBy,
 } from "firebase/firestore";
 import type { VanOrder, VanLocation, FutureVanStop, OrderStatus } from "../context/VanContext";
-import type { InventoryStock, FlashDealConfig } from "@/lib/smartAgentsEngine";
+import type { InventoryStock, FlashDealConfig } from "./smartAgentsEngine";
 
 export interface RealtimeSyncHandlers {
   onInitialSync?: (data: {

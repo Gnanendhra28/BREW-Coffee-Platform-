@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   processEmployeeOpsQuery,
   CURATED_PARKING_SPOTS,
-} from "@/lib/employeeBaristaOpsEngine";
-import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
-import { getCachedAgentData, setCachedAgentData } from "@/lib/agentCache";
+} from "../../../lib/employeeBaristaOpsEngine";
+import { checkRateLimit, getClientIp } from "../../../lib/rateLimit";
+import { getCachedAgentData, setCachedAgentData } from "../../../lib/agentCache";
 import {
   BaristaOpsChatResponseSchema,
   safeValidateAgentOutput,
-} from "@/lib/agentSchemas";
+} from "../../../lib/agentSchemas";
 
 export const dynamic = "force-dynamic";
 

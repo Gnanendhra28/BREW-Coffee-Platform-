@@ -21,7 +21,7 @@ import {
   WeatherForecast,
   EmployeeImprovementPlan,
   processEmployeeOpsQuery,
-} from "@/lib/employeeBaristaOpsEngine";
+} from "../lib/employeeBaristaOpsEngine";
 
 interface OpsChatMessage {
   id: string;

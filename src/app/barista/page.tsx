@@ -37,7 +37,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../../context/AuthContext";
 import { useVan, OrderStatus } from "../../context/VanContext";
 import { MENU_ITEMS } from "../../data/menuData";
-import { BaristaOpsAssistant } from "@/components/BaristaOpsAssistant";
+import { BaristaOpsAssistant } from "../../components/BaristaOpsAssistant";
 import {
   analyzeStockDepletion,
   generateSocialBroadcast,
@@ -55,7 +55,7 @@ import {
   getYieldOptimizerStatus,
   processEventInquiry,
   ConciergeInquiryResult,
-} from "@/lib/smartAgentsEngine";
+} from "../../lib/smartAgentsEngine";
 
 export default function BaristaKDSPage() {
   const {

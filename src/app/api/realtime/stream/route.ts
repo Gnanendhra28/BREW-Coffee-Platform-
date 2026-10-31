@@ -3,7 +3,7 @@ import {
   subscribeToRealtimeServer,
   getRealtimeServerSnapshot,
   ServerRealtimeEvent,
-} from "@/lib/serverRealtimeStore";
+} from "../../../../lib/serverRealtimeStore";
 
 export const dynamic = "force-dynamic";
 

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
-import { broadcastRealtimeEvent } from "@/lib/serverRealtimeStore";
-import { dispatchDigitalReceipt } from "@/lib/receiptNotifier";
-import { maskPhone } from "@/lib/observability/logger";
+import { broadcastRealtimeEvent } from "../../../../lib/serverRealtimeStore";
+import { dispatchDigitalReceipt } from "../../../../lib/receiptNotifier";
+import { maskPhone } from "../../../../lib/observability/logger";
 import {
   processWebhookTransaction,
   isPaymentIdProcessed,
-} from "@/lib/serverPaymentStore";
+} from "../../../../lib/serverPaymentStore";
 
 export const dynamic = "force-dynamic";
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken } from "@/lib/authTokens";
+import { verifySessionToken } from "./lib/authTokens";
 
 export const config = {
   matcher: [

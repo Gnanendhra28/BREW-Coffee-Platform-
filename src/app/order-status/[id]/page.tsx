@@ -15,12 +15,12 @@ import {
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useVan, VanOrder } from "../../../context/VanContext";
-import { Header } from "@/components/Header";
+import { Header } from "../../../components/Header";
 import {
   registerBuzzerServiceWorker,
   requestBuzzerPermission,
   triggerHardwareBuzzer,
-} from "@/lib/pushBuzzer";
+} from "../../../lib/pushBuzzer";
 
 const FALLBACK_CREATED_AT = 1710000000000;
 

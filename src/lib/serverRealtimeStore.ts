@@ -7,7 +7,7 @@ import {
   DEFAULT_INVENTORY_STOCK,
   type FlashDealConfig,
   DEFAULT_FLASH_DEAL,
-} from "@/lib/smartAgentsEngine";
+} from "./smartAgentsEngine";
 
 export interface ServerRealtimeEvent {
   type:

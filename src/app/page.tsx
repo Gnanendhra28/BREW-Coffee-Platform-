@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Header } from "@/components/Header";
-import { SplashHero } from "@/components/SplashHero";
-import { CoffeeSelectionSection } from "@/components/CoffeeSelectionSection";
-import { RotatingCupStorySection } from "@/components/RotatingCupStorySection";
-import { BottomCard } from "@/components/BottomCard";
-import { CoffeeQuizModal } from "@/components/CoffeeQuizModal";
-import { OrderModal } from "@/components/OrderModal";
+import { Header } from "../components/Header";
+import { SplashHero } from "../components/SplashHero";
+import { CoffeeSelectionSection } from "../components/CoffeeSelectionSection";
+import { RotatingCupStorySection } from "../components/RotatingCupStorySection";
+import { BottomCard } from "../components/BottomCard";
+import { CoffeeQuizModal } from "../components/CoffeeQuizModal";
+import { OrderModal } from "../components/OrderModal";
 
 export default function Home() {
   const router = useRouter();

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { MENU_ITEMS } from "../../../../data/menuData";
-import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
-import { maskPhone } from "@/lib/observability/logger";
+import { checkRateLimit, getClientIp } from "../../../../lib/rateLimit";
+import { maskPhone } from "../../../../lib/observability/logger";
 import {
   saveStoredPaymentOrder,
   StoredPaymentOrder,
   StoredPaymentItem,
-} from "@/lib/serverPaymentStore";
+} from "../../../../lib/serverPaymentStore";
 
 export const dynamic = "force-dynamic";
 

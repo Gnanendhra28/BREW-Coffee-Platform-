@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateBaristaResponse } from "@/lib/baristaEngine";
+import { generateBaristaResponse } from "../../../lib/baristaEngine";
 import { MENU_ITEMS } from "../../../data/menuData";
-import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
-import { getCachedAgentData, setCachedAgentData } from "@/lib/agentCache";
+import { checkRateLimit, getClientIp } from "../../../lib/rateLimit";
+import { getCachedAgentData, setCachedAgentData } from "../../../lib/agentCache";
 import {
   BaristaChatResponseSchema,
   safeValidateAgentOutput,
-} from "@/lib/agentSchemas";
+} from "../../../lib/agentSchemas";
 
 export const dynamic = "force-dynamic";
 

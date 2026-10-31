@@ -3,9 +3,9 @@ import "./globals.css";
 import { AuthProvider } from "../context/AuthContext";
 import { CartProvider } from "../context/CartContext";
 import { VanProvider } from "../context/VanContext";
-import { AuthModal } from "@/components/AuthModal";
-import { BaristaChatbot } from "@/components/BaristaChatbot";
-import { FlashDealBanner } from "@/components/FlashDealBanner";
+import { AuthModal } from "../components/AuthModal";
+import { BaristaChatbot } from "../components/BaristaChatbot";
+import { FlashDealBanner } from "../components/FlashDealBanner";
 
 export const viewport: Viewport = {
   themeColor: "#140D08",

@@ -1,8 +1,15 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: true,
+  webpack: (config) => {
+    config.resolve = config.resolve || {};
+    config.resolve.alias = config.resolve.alias || {};
+    config.resolve.alias["@"] = path.resolve(process.cwd(), "src");
+    return config;
+  },
   images: {
     formats: ["image/avif", "image/webp"],
     deviceSizes: [360, 480, 640, 750, 828, 1080, 1200, 1920],

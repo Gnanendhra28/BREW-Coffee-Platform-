@@ -25,14 +25,14 @@ import {
   Wallet,
 } from "lucide-react";
 import confetti from "canvas-confetti";
-import { Header } from "@/components/Header";
+import { Header } from "../../components/Header";
 import { useCart } from "../../context/CartContext";
 import { useAuth } from "../../context/AuthContext";
 import { useVan } from "../../context/VanContext";
 import { MENU_ITEMS } from "../../data/menuData";
-import { formatWhatsAppReceipt, getWhatsAppReceiptUrl } from "@/lib/receiptNotifier";
-import { registerBuzzerServiceWorker } from "@/lib/pushBuzzer";
-import { analytics } from "@/lib/observability/analytics";
+import { formatWhatsAppReceipt, getWhatsAppReceiptUrl } from "../../lib/receiptNotifier";
+import { registerBuzzerServiceWorker } from "../../lib/pushBuzzer";
+import { analytics } from "../../lib/observability/analytics";
 
 export default function CartPage() {
   const router = useRouter();

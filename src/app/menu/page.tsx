@@ -19,7 +19,7 @@ import {
   Flame,
 } from "lucide-react";
 import confetti from "canvas-confetti";
-import { Header } from "@/components/Header";
+import { Header } from "../../components/Header";
 import { MENU_ITEMS, CATEGORIES, CategoryType, MenuItem } from "../../data/menuData";
 import { useCart } from "../../context/CartContext";
 

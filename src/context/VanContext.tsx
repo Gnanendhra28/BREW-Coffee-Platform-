@@ -8,7 +8,7 @@ import {
   deductOrderIngredients,
   FlashDealConfig,
   DEFAULT_FLASH_DEAL,
-} from "@/lib/smartAgentsEngine";
+} from "../lib/smartAgentsEngine";
 import {
   initRealtimeCloudSync,
   dispatchCloudOrder,
@@ -18,7 +18,7 @@ import {
   dispatchCloudFutureStops,
   dispatchCloudCurbside,
   dispatchCloudFlashDeal,
-} from "@/lib/realtimeDb";
+} from "../lib/realtimeDb";
 
 export type OrderStatus = "received" | "brewing" | "ready" | "served" | "cancelled";
 

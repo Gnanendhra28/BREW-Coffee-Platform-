@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { addSubscription } from "@/lib/pushSubscriptionStore";
+import { addSubscription } from "../../../../lib/pushSubscriptionStore";
 
 export const dynamic = "force-dynamic";
 
