@@ -17,9 +17,9 @@ import {
   ChevronDown,
 } from "lucide-react";
 import confetti from "canvas-confetti";
-import { useCart } from "@/context/CartContext";
-import { useAuth } from "@/context/AuthContext";
-import { MenuItem } from "@/data/menuData";
+import { useCart } from "../context/CartContext";
+import { useAuth } from "../context/AuthContext";
+import { MenuItem } from "../data/menuData";
 import { ChatMessage } from "@/lib/baristaEngine";
 
 const INITIAL_QUICK_CHIPS = [

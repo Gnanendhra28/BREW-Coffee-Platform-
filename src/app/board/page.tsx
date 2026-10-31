@@ -20,7 +20,7 @@ import {
   ExternalLink,
   Settings2,
 } from "lucide-react";
-import { useVan } from "@/context/VanContext";
+import { useVan } from "../../context/VanContext";
 import { QRCodeDisplay } from "@/components/QRCodeDisplay";
 
 export default function OutdoorBoardPage() {

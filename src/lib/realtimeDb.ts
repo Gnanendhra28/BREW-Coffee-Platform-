@@ -10,7 +10,7 @@ import {
   query,
   orderBy,
 } from "firebase/firestore";
-import type { VanOrder, VanLocation, FutureVanStop, OrderStatus } from "@/context/VanContext";
+import type { VanOrder, VanLocation, FutureVanStop, OrderStatus } from "../context/VanContext";
 import type { InventoryStock, FlashDealConfig } from "@/lib/smartAgentsEngine";
 
 export interface RealtimeSyncHandlers {

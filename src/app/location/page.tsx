@@ -24,7 +24,7 @@ import {
   Copy,
 } from "lucide-react";
 import { Header } from "@/components/Header";
-import { useVan } from "@/context/VanContext";
+import { useVan } from "../../context/VanContext";
 import { generateEventQuotation, type EventQuotation } from "@/lib/smartAgentsEngine";
 
 export default function VanLocationPage() {

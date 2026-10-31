@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateBaristaResponse } from "@/lib/baristaEngine";
-import { MENU_ITEMS } from "@/data/menuData";
+import { MENU_ITEMS } from "../../../data/menuData";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { getCachedAgentData, setCachedAgentData } from "@/lib/agentCache";
 import {

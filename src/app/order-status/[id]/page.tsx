@@ -14,7 +14,7 @@ import {
   Volume2,
 } from "lucide-react";
 import confetti from "canvas-confetti";
-import { useVan, VanOrder } from "@/context/VanContext";
+import { useVan, VanOrder } from "../../../context/VanContext";
 import { Header } from "@/components/Header";
 import {
   registerBuzzerServiceWorker,

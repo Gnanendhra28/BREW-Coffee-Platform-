@@ -19,8 +19,8 @@ import {
   Menu,
   X,
 } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
-import { useCart } from "@/context/CartContext";
+import { useAuth } from "../context/AuthContext";
+import { useCart } from "../context/CartContext";
 
 interface HeaderProps {
   onOrderClick?: () => void;

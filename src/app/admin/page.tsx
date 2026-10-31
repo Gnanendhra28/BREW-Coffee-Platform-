@@ -17,8 +17,8 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
-import { useVan } from "@/context/VanContext";
+import { useAuth } from "../../context/AuthContext";
+import { useVan } from "../../context/VanContext";
 
 export default function FleetAdminPage() {
   const router = useRouter();

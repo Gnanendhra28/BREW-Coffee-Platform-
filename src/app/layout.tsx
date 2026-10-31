@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { AuthProvider } from "@/context/AuthContext";
-import { CartProvider } from "@/context/CartContext";
-import { VanProvider } from "@/context/VanContext";
+import { AuthProvider } from "../context/AuthContext";
+import { CartProvider } from "../context/CartContext";
+import { VanProvider } from "../context/VanContext";
 import { AuthModal } from "@/components/AuthModal";
 import { BaristaChatbot } from "@/components/BaristaChatbot";
 import { FlashDealBanner } from "@/components/FlashDealBanner";

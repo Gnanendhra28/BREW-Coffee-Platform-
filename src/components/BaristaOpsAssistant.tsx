@@ -15,7 +15,7 @@ import {
   ShieldCheck,
   Check,
 } from "lucide-react";
-import { useVan } from "@/context/VanContext";
+import { useVan } from "../context/VanContext";
 import {
   VanParkingSpot,
   WeatherForecast,

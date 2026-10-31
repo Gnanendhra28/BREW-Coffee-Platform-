@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Plus, Minus, Coffee, ArrowRight } from "lucide-react";
 import confetti from "canvas-confetti";
-import { useCart } from "@/context/CartContext";
+import { useCart } from "../context/CartContext";
 
 interface OrderModalProps {
   isOpen: boolean;

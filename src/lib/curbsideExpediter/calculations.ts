@@ -15,7 +15,7 @@ import {
   CurbsideOperationalMetrics,
   OrderPreparationEstimate,
 } from "./types";
-import { OrderStatus } from "@/context/VanContext";
+import { OrderStatus } from "../../context/VanContext";
 
 // Standard preparation durations per unit item in seconds
 export const ITEM_PREPARATION_DURATIONS: Record<string, number> = {

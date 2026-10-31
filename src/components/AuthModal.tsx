@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Mail, Lock, User as UserIcon, AlertCircle, CheckCircle2, ArrowRight, Sparkles } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "../context/AuthContext";
 
 export const AuthModal: React.FC = () => {
   const {

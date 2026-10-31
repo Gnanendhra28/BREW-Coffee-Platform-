@@ -34,9 +34,9 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
-import { useVan, OrderStatus } from "@/context/VanContext";
-import { MENU_ITEMS } from "@/data/menuData";
+import { useAuth } from "../../context/AuthContext";
+import { useVan, OrderStatus } from "../../context/VanContext";
+import { MENU_ITEMS } from "../../data/menuData";
 import { BaristaOpsAssistant } from "@/components/BaristaOpsAssistant";
 import {
   analyzeStockDepletion,

@@ -1,7 +1,7 @@
 // Global In-Memory Real-Time Server State Hub for Cross-Device Synchronization
 // Enables instant (<500ms) sync across multiple phones, laptops, and outdoor displays.
 
-import type { VanOrder, VanLocation, FutureVanStop, OrderStatus } from "@/context/VanContext";
+import type { VanOrder, VanLocation, FutureVanStop, OrderStatus } from "../context/VanContext";
 import {
   type InventoryStock,
   DEFAULT_INVENTORY_STOCK,

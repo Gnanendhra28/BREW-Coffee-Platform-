@@ -22,8 +22,8 @@ import {
   HeartHandshake,
 } from "lucide-react";
 import { Header } from "@/components/Header";
-import { useAuth } from "@/context/AuthContext";
-import { useVan } from "@/context/VanContext";
+import { useAuth } from "../../context/AuthContext";
+import { useVan } from "../../context/VanContext";
 import {
   analyzeReviewSentiment,
   ReviewRecoveryNotice,

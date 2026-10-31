@@ -5,7 +5,7 @@
 // 3. Decoupled VehicleArrivalProvider abstraction for GPS and beacon signals
 // 4. Barista KDS priority management and deduplicated notification delivery
 
-import { VanOrder, OrderStatus } from "@/context/VanContext";
+import { VanOrder, OrderStatus } from "../../context/VanContext";
 import {
   CurbsideUrgencyLevel,
   CurbsideAction,

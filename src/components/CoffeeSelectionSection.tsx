@@ -5,7 +5,7 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { Plus, Check, Star, ArrowRight } from "lucide-react";
 import confetti from "canvas-confetti";
-import { useCart } from "@/context/CartContext";
+import { useCart } from "../context/CartContext";
 import { analytics } from "@/lib/observability/analytics";
 
 interface Product {

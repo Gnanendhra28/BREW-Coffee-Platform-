@@ -2,8 +2,8 @@
 
 import React, { useState } from "react";
 import { usePathname } from "next/navigation";
-import { useVan } from "@/context/VanContext";
-import { useCart } from "@/context/CartContext";
+import { useVan } from "../context/VanContext";
+import { useCart } from "../context/CartContext";
 import { Zap, X, Check, ShoppingBag } from "lucide-react";
 import { analytics } from "@/lib/observability/analytics";
 

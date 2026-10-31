@@ -8,7 +8,7 @@ import {
   updateOrderInCache,
   registerOrderInCache,
 } from "./tools";
-import { VanOrder } from "@/context/VanContext";
+import { VanOrder } from "../../context/VanContext";
 
 type CurbsideEventListener = (event: CurbsideExpediterEvent) => void;
 const EVENT_LISTENERS: Set<CurbsideEventListener> = new Set();

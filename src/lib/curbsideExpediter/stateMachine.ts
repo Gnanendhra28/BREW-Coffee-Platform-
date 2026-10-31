@@ -5,7 +5,7 @@
 // 3. Seamless bidirectional mapping with existing OrderStatus ('received', 'brewing', 'ready', 'served', 'cancelled')
 
 import { CurbsideLifecycleState } from "./types";
-import { OrderStatus } from "@/context/VanContext";
+import { OrderStatus } from "../../context/VanContext";
 
 export const VALID_LIFECYCLE_TRANSITIONS: Record<CurbsideLifecycleState, CurbsideLifecycleState[]> = {
   ORDER_CREATED: ["CONFIRMED", "PREPARING", "CANCELLED", "FAILED"],
