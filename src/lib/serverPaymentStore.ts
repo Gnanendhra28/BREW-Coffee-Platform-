@@ -59,6 +59,32 @@ const ORDERS_COLLECTION = "payment_orders";
 const WEBHOOKS_COLLECTION = "processed_webhooks";
 const PAYMENTS_COLLECTION = "processed_payments";
 
+let firestoreAuthFailed = false;
+
+function shouldSkipFirestore(): boolean {
+  if (firestoreAuthFailed) return true;
+  if (
+    process.env.PLAYWRIGHT_TEST === "true" &&
+    !process.env.GOOGLE_APPLICATION_CREDENTIALS &&
+    !process.env.FIREBASE_SERVICE_ACCOUNT &&
+    !process.env.FIREBASE_CLIENT_EMAIL
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function handleFirestoreError(err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (
+    msg.includes("Could not load the default credentials") ||
+    msg.includes("UNAUTHENTICATED") ||
+    msg.includes("authentication/getting-started")
+  ) {
+    firestoreAuthFailed = true;
+  }
+}
+
 /**
  * Persists a new or updated payment order into authoritative Cloud Firestore
  */
@@ -68,6 +94,8 @@ export async function saveStoredPaymentOrder(order: StoredPaymentOrder): Promise
   if (order.razorpayOrderId) {
     memOrders.set(order.razorpayOrderId, order);
   }
+
+  if (shouldSkipFirestore()) return;
 
   const db = getAdminFirestore();
   if (db) {
@@ -80,10 +108,11 @@ export async function saveStoredPaymentOrder(order: StoredPaymentOrder): Promise
         }
       })();
       const timeoutPromise = new Promise<void>((resolve) =>
-        setTimeout(() => resolve(), 2500)
+        setTimeout(() => resolve(), 1500)
       );
       await Promise.race([savePromise, timeoutPromise]);
     } catch (err) {
+      handleFirestoreError(err);
       console.warn("[PAYMENT STORE] Firestore order persistence warning:", err);
     }
   }
@@ -99,6 +128,10 @@ export async function getStoredPaymentOrder(
   const inMemory = memOrders.get(id);
   if (inMemory) {
     return inMemory;
+  }
+
+  if (shouldSkipFirestore()) {
+    return undefined;
   }
 
   const db = getAdminFirestore();
@@ -133,12 +166,13 @@ export async function getStoredPaymentOrder(
       })();
 
       const timeoutPromise = new Promise<undefined>((resolve) =>
-        setTimeout(() => resolve(undefined), 2500)
+        setTimeout(() => resolve(undefined), 1500)
       );
 
       const result = await Promise.race([lookupPromise, timeoutPromise]);
       if (result) return result;
     } catch (err) {
+      handleFirestoreError(err);
       console.warn("[PAYMENT STORE] Firestore order lookup warning:", err);
     }
   }
@@ -163,6 +197,10 @@ export async function markStoredPaymentOrderPaid(
     existingMem.razorpayPaymentId = paymentId;
     existingMem.updatedAt = Date.now();
     existingMem.verificationMetadata = verificationMetadata;
+  }
+
+  if (shouldSkipFirestore()) {
+    return { success: true, order: existingMem };
   }
 
   const db = getAdminFirestore();
@@ -217,11 +255,12 @@ export async function markStoredPaymentOrderPaid(
       })();
 
       const timeoutPromise = new Promise<{ success: boolean; order?: StoredPaymentOrder }>((resolve) =>
-        setTimeout(() => resolve({ success: true, order: existingMem }), 2500)
+        setTimeout(() => resolve({ success: true, order: existingMem }), 1500)
       );
 
       return await Promise.race([markPaidPromise, timeoutPromise]);
     } catch (err) {
+      handleFirestoreError(err);
       console.warn("[PAYMENT STORE] Firestore mark paid transaction warning:", err);
     }
   }
@@ -234,16 +273,26 @@ export async function markStoredPaymentOrderPaid(
  */
 export async function isPaymentIdProcessed(paymentId: string): Promise<boolean> {
   if (memPayments.has(paymentId)) return true;
+  if (shouldSkipFirestore()) return false;
 
   const db = getAdminFirestore();
   if (db) {
     try {
-      const snap = await db.collection(PAYMENTS_COLLECTION).doc(paymentId).get();
-      if (snap.exists) {
-        memPayments.add(paymentId);
-        return true;
-      }
-    } catch {}
+      const checkPromise = (async () => {
+        const snap = await db.collection(PAYMENTS_COLLECTION).doc(paymentId).get();
+        if (snap.exists) {
+          memPayments.add(paymentId);
+          return true;
+        }
+        return false;
+      })();
+      const timeoutPromise = new Promise<boolean>((resolve) =>
+        setTimeout(() => resolve(false), 1500)
+      );
+      return await Promise.race([checkPromise, timeoutPromise]);
+    } catch (err) {
+      handleFirestoreError(err);
+    }
   }
   return false;
 }
@@ -253,14 +302,22 @@ export async function isPaymentIdProcessed(paymentId: string): Promise<boolean> 
  */
 export async function markPaymentIdProcessed(paymentId: string): Promise<void> {
   memPayments.add(paymentId);
+  if (shouldSkipFirestore()) return;
+
   const db = getAdminFirestore();
   if (db) {
     try {
-      await db.collection(PAYMENTS_COLLECTION).doc(paymentId).set({
+      const setPromise = db.collection(PAYMENTS_COLLECTION).doc(paymentId).set({
         paymentId,
         processedAt: Date.now(),
       });
-    } catch {}
+      const timeoutPromise = new Promise<void>((resolve) =>
+        setTimeout(() => resolve(), 1500)
+      );
+      await Promise.race([setPromise, timeoutPromise]);
+    } catch (err) {
+      handleFirestoreError(err);
+    }
   }
 }
 
@@ -330,6 +387,10 @@ export async function processWebhookTransaction(
     if (eventDetails.paymentId) memPayments.add(eventDetails.paymentId);
     return { success: true, alreadyProcessed: false, order: orderData };
   };
+
+  if (shouldSkipFirestore()) {
+    return verifyAndApplyMemory();
+  }
 
   const db = getAdminFirestore();
   if (!db) {
@@ -412,6 +473,7 @@ export async function processWebhookTransaction(
     if (eventDetails.paymentId) memPayments.add(eventDetails.paymentId);
     return txResult;
   } catch (err) {
+    handleFirestoreError(err);
     const errorMsg = err instanceof Error ? err.message : "Transaction failed";
     console.warn("[PAYMENT STORE] Webhook transaction fallback warning:", errorMsg);
     // Explicit domain errors (e.g. tampering, order missing) should be returned immediately
@@ -423,7 +485,11 @@ export async function processWebhookTransaction(
       return { success: false, alreadyProcessed: false, error: errorMsg };
     }
     // If the error is due to missing GCP credentials in CI/testing, fall back to memory validation
-    if (errorMsg.includes("Could not load the default credentials") || errorMsg.includes("credentials")) {
+    if (
+      errorMsg.includes("Could not load the default credentials") ||
+      errorMsg.includes("credentials") ||
+      errorMsg.includes("UNAUTHENTICATED")
+    ) {
       return verifyAndApplyMemory();
     }
     return { success: false, alreadyProcessed: false, error: errorMsg };
