@@ -262,18 +262,52 @@ export async function processWebhookTransaction(
     return { success: true, alreadyProcessed: true };
   }
 
-  const db = getAdminFirestore();
-  if (!db) {
-    // Memory fallback when Firestore is unavailable
+  // Helper to verify and update in-memory order (used when Firestore is unconfigured or in CI)
+  const verifyAndApplyMemory = () => {
+    let orderData: StoredPaymentOrder | undefined;
+    if (eventDetails.orderId) {
+      orderData = memOrders.get(eventDetails.orderId);
+      if (!orderData) {
+        return {
+          success: false,
+          alreadyProcessed: false,
+          error: `Order not found for orderId: ${eventDetails.orderId}`,
+        };
+      }
+      if (orderData.amountInPaise !== eventDetails.receivedAmountInPaise) {
+        return {
+          success: false,
+          alreadyProcessed: false,
+          error: `Payment amount mismatch! Expected: ₹${orderData.amountInPaise / 100}, Received: ₹${eventDetails.receivedAmountInPaise / 100}`,
+        };
+      }
+      if (orderData.currency !== eventDetails.currency) {
+        return {
+          success: false,
+          alreadyProcessed: false,
+          error: `Currency mismatch! Expected: ${orderData.currency}, Received: ${eventDetails.currency}`,
+        };
+      }
+
+      orderData.paymentStatus = "paid";
+      orderData.orderStatus = "brewing";
+      orderData.razorpayPaymentId = eventDetails.paymentId;
+      orderData.updatedAt = Date.now();
+      orderData.verificationMetadata = {
+        webhookEventId: eventId,
+        webhookProcessedAt: Date.now(),
+        channel: "razorpay_webhook",
+      };
+    }
+
     memWebhooks.add(eventId);
     if (eventDetails.paymentId) memPayments.add(eventDetails.paymentId);
-    const existing = memOrders.get(eventDetails.orderId);
-    if (existing) {
-      existing.paymentStatus = "paid";
-      existing.orderStatus = "brewing";
-      existing.razorpayPaymentId = eventDetails.paymentId;
-    }
-    return { success: true, alreadyProcessed: false, order: existing };
+    return { success: true, alreadyProcessed: false, order: orderData };
+  };
+
+  const db = getAdminFirestore();
+  if (!db) {
+    return verifyAndApplyMemory();
   }
 
   try {
@@ -354,17 +388,17 @@ export async function processWebhookTransaction(
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Transaction failed";
     console.warn("[PAYMENT STORE] Webhook transaction fallback warning:", errorMsg);
-    // If the error is due to missing GCP credentials in CI/testing, fall back to in-memory store
+    // Explicit domain errors (e.g. tampering, order missing) should be returned immediately
+    if (
+      errorMsg.includes("Payment amount mismatch") ||
+      errorMsg.includes("Currency mismatch") ||
+      errorMsg.includes("Order not found")
+    ) {
+      return { success: false, alreadyProcessed: false, error: errorMsg };
+    }
+    // If the error is due to missing GCP credentials in CI/testing, fall back to memory validation
     if (errorMsg.includes("Could not load the default credentials") || errorMsg.includes("credentials")) {
-      memWebhooks.add(eventId);
-      if (eventDetails.paymentId) memPayments.add(eventDetails.paymentId);
-      const existing = memOrders.get(eventDetails.orderId);
-      if (existing) {
-        existing.paymentStatus = "paid";
-        existing.orderStatus = "brewing";
-        existing.razorpayPaymentId = eventDetails.paymentId;
-      }
-      return { success: true, alreadyProcessed: false, order: existing };
+      return verifyAndApplyMemory();
     }
     return { success: false, alreadyProcessed: false, error: errorMsg };
   }
