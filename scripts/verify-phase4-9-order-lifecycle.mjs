@@ -288,7 +288,7 @@ async function run() {
   const invalidLoginRes = await fetch(`${BASE_URL}/api/auth/session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pin: "9999" }),
+    body: JSON.stringify({ action: "staff_pin", pin: "9999" }),
   });
   assert(invalidLoginRes.status === 401, "Invalid PIN rejected with HTTP 401 Unauthorized");
 
@@ -296,7 +296,7 @@ async function run() {
   const baristaLoginRes = await fetch(`${BASE_URL}/api/auth/session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pin: BARISTA_PIN }),
+    body: JSON.stringify({ action: "staff_pin", pin: BARISTA_PIN }),
   });
   assert(baristaLoginRes.status === 200, "Barista PIN authenticated successfully with HTTP 200 OK");
   const baristaCookieHeader = baristaLoginRes.headers.get("set-cookie");
@@ -307,7 +307,7 @@ async function run() {
   const adminLoginRes = await fetch(`${BASE_URL}/api/auth/session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pin: ADMIN_PIN }),
+    body: JSON.stringify({ action: "staff_pin", pin: ADMIN_PIN }),
   });
   assert(adminLoginRes.status === 200, "Admin PIN authenticated successfully with HTTP 200 OK");
   const adminCookieHeader = adminLoginRes.headers.get("set-cookie");
@@ -343,10 +343,9 @@ async function run() {
       },
       body: JSON.stringify({
         type: "ORDER_STATUS_CHANGED",
-        data: {
+        payload: {
           orderId: razorpayOrderId,
           status: t.status,
-          updatedAt: Date.now(),
         },
       }),
     });
@@ -362,7 +361,7 @@ async function run() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       type: "ORDER_STATUS_CHANGED",
-      data: { orderId: razorpayOrderId, status: "pending" },
+      payload: { orderId: razorpayOrderId, status: "pending" },
     }),
   });
   assert(
@@ -427,7 +426,7 @@ async function run() {
     },
     body: JSON.stringify({
       type: "ORDER_STATUS_CHANGED",
-      data: { orderId: razorpayOrderId, status: "cancelled" },
+      payload: { orderId: razorpayOrderId, status: "cancelled" },
     }),
   });
   assert(
