@@ -128,6 +128,65 @@ test.describe('BREW Mobile Platform E2E Smoke & Critical Paths', () => {
     expect(validVerifyRes.status()).toBe(200);
     const verifyData = await validVerifyRes.json();
     expect(verifyData.verified).toBe(true);
+
+    // 5d. Replay attack: submitting same payment ID again
+    const replayVerifyRes = await request.post('/api/payments/verify', {
+      data: {
+        razorpay_order_id: orderData.orderId,
+        razorpay_payment_id: testPaymentId,
+        razorpay_signature: validSignature,
+      },
+    });
+    expect(replayVerifyRes.status()).toBe(200);
+    const replayData = await replayVerifyRes.json();
+    expect(replayData.alreadyProcessed).toBe(true);
+
+    // 5e. Webhook HMAC-SHA256 signature verification & deduplication
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || 'brew_webhook_secret_dev_2026';
+    const whPayload = JSON.stringify({
+      event: 'payment.captured',
+      id: `evt_e2e_${Date.now()}`,
+      payload: {
+        payment: {
+          entity: {
+            id: `pay_e2e_wh_${Date.now()}`,
+            amount: 30100,
+            currency: 'INR',
+            notes: {
+              orderId: orderData.orderId,
+              customerName: 'Kavya Nair',
+            },
+          },
+        },
+      },
+    });
+    const whSignature = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(whPayload)
+      .digest('hex');
+
+    const whRes = await request.post('/api/webhooks/razorpay', {
+      headers: {
+        'Content-Type': 'application/json',
+        'x-razorpay-signature': whSignature,
+      },
+      data: whPayload,
+    });
+    expect(whRes.status()).toBe(200);
+    const whData = await whRes.json();
+    expect(whData.status).toBe('ok');
+
+    // Duplicate webhook delivery returns alreadyProcessed: true
+    const dupWhRes = await request.post('/api/webhooks/razorpay', {
+      headers: {
+        'Content-Type': 'application/json',
+        'x-razorpay-signature': whSignature,
+      },
+      data: whPayload,
+    });
+    expect(dupWhRes.status()).toBe(200);
+    const dupWhData = await dupWhRes.json();
+    expect(dupWhData.alreadyProcessed).toBe(true);
   });
 
   // 6. CATERING & EVENT BOOKING CONCIERGE (AGENT 4)
