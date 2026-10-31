@@ -76,15 +76,13 @@ export async function checkRateLimit(
   const nowMs = Date.now();
   const resetTimestamp = Math.ceil((nowMs + windowSeconds * 1000) / 1000);
 
-  // Respect ALLOW_LOCAL_FALLBACK so deployments without an external Redis instance
-  // can smoothly degrade to sliding-window local memory rate limiting.
+  // In true production, sensitive endpoints strictly enforce Upstash Redis and fail-closed security.
+  // ALLOW_LOCAL_FALLBACK cannot bypass production controls.
   const isLocalTest =
     process.env.PLAYWRIGHT_TEST === "true" ||
     process.env.BREW_TEST_SUITE === "true";
   const isProduction =
-    process.env.NODE_ENV === "production" &&
-    process.env.ALLOW_LOCAL_FALLBACK !== "true" &&
-    !isLocalTest;
+    process.env.NODE_ENV === "production" && !isLocalTest;
   const isSensitive = options?.sensitive === true;
   const outagePolicy =
     options?.outagePolicy || (isSensitive ? "fail-closed" : "degraded-log");

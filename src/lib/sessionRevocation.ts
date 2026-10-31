@@ -114,8 +114,8 @@ export async function isSessionRevoked(
 
   const isProduction =
     process.env.NODE_ENV === "production" &&
-    process.env.ALLOW_LOCAL_FALLBACK !== "true" &&
-    process.env.BREW_TEST_SUITE !== "true";
+    process.env.BREW_TEST_SUITE !== "true" &&
+    process.env.PLAYWRIGHT_TEST !== "true";
 
   let redisChecked = false;
   let redisError: unknown = null;

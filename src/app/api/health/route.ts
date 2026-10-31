@@ -43,13 +43,27 @@ export async function GET() {
         const db = getAdminFirestore();
         if (db) {
           const fsStart = Date.now();
+          let timer: NodeJS.Timeout | null = null;
+
+          // 1. Initiate Firestore probe
           const pingPromise = db.collection("_healthcheck").doc("ping").get();
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Firestore probe timeout")), 1200)
-          );
-          await Promise.race([pingPromise, timeoutPromise]);
-          firestoreStatus = "healthy";
-          firestoreLatencyMs = Date.now() - fsStart;
+          // Safe cleanup: attach handler to guarantee abandoned promise never triggers unhandled rejection if timeout fires first
+          pingPromise.catch(() => {});
+
+          // 2. Bounded timeout promise
+          const timeoutPromise = new Promise<null>((resolve) => {
+            timer = setTimeout(() => resolve(null), 1200);
+          });
+
+          const result = await Promise.race([pingPromise, timeoutPromise]);
+          if (timer) clearTimeout(timer);
+
+          if (result === null) {
+            firestoreStatus = "unhealthy";
+          } else {
+            firestoreStatus = "healthy";
+            firestoreLatencyMs = Date.now() - fsStart;
+          }
         }
       } catch (fsErr: unknown) {
         const msg = fsErr instanceof Error ? fsErr.message : String(fsErr);
@@ -110,6 +124,8 @@ export async function GET() {
       },
       fleetOperations: {
         status: "healthy",
+        dataSource: "configuration_baseline",
+        mode: "demonstration_baseline",
         activeVans: 3,
         primaryStation: "HITEC City — Cyber Towers (Hyderabad)",
       },

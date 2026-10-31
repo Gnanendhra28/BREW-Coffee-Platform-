@@ -23,7 +23,6 @@ function getAuthSecret(): string {
 export function getStaffPins(): { baristaPin: string; fleetAdminPin: string } {
   const isProd =
     process.env.NODE_ENV === "production" &&
-    process.env.ALLOW_LOCAL_FALLBACK !== "true" &&
     process.env.BREW_TEST_SUITE !== "true" &&
     process.env.PLAYWRIGHT_TEST !== "true";
 
