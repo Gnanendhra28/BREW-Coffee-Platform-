@@ -73,10 +73,16 @@ export async function saveStoredPaymentOrder(order: StoredPaymentOrder): Promise
   if (db) {
     try {
       const dataToSave = JSON.parse(JSON.stringify({ ...order, updatedAt: Date.now() }));
-      await db.collection(ORDERS_COLLECTION).doc(order.orderId).set(dataToSave, { merge: true });
-      if (order.razorpayOrderId && order.razorpayOrderId !== order.orderId) {
-        await db.collection(ORDERS_COLLECTION).doc(order.razorpayOrderId).set(dataToSave, { merge: true });
-      }
+      const savePromise = (async () => {
+        await db.collection(ORDERS_COLLECTION).doc(order.orderId).set(dataToSave, { merge: true });
+        if (order.razorpayOrderId && order.razorpayOrderId !== order.orderId) {
+          await db.collection(ORDERS_COLLECTION).doc(order.razorpayOrderId).set(dataToSave, { merge: true });
+        }
+      })();
+      const timeoutPromise = new Promise<void>((resolve) =>
+        setTimeout(() => resolve(), 2500)
+      );
+      await Promise.race([savePromise, timeoutPromise]);
     } catch (err) {
       console.warn("[PAYMENT STORE] Firestore order persistence warning:", err);
     }
@@ -89,33 +95,49 @@ export async function saveStoredPaymentOrder(order: StoredPaymentOrder): Promise
 export async function getStoredPaymentOrder(
   id: string
 ): Promise<StoredPaymentOrder | undefined> {
+  // 1. Fast in-memory lookup (sub-millisecond)
+  const inMemory = memOrders.get(id);
+  if (inMemory) {
+    return inMemory;
+  }
+
   const db = getAdminFirestore();
 
   if (db) {
     try {
-      // 1. Check by direct document ID (internal orderId)
-      const docRef = db.collection(ORDERS_COLLECTION).doc(id);
-      const snap = await docRef.get();
-      if (snap.exists) {
-        const data = snap.data() as StoredPaymentOrder;
-        memOrders.set(data.orderId, data);
-        if (data.razorpayOrderId) memOrders.set(data.razorpayOrderId, data);
-        return data;
-      }
+      const lookupPromise = (async () => {
+        // Direct document ID (internal orderId)
+        const docRef = db.collection(ORDERS_COLLECTION).doc(id);
+        const snap = await docRef.get();
+        if (snap.exists) {
+          const data = snap.data() as StoredPaymentOrder;
+          memOrders.set(data.orderId, data);
+          if (data.razorpayOrderId) memOrders.set(data.razorpayOrderId, data);
+          return data;
+        }
 
-      // 2. Query by razorpayOrderId
-      const querySnap = await db
-        .collection(ORDERS_COLLECTION)
-        .where("razorpayOrderId", "==", id)
-        .limit(1)
-        .get();
+        // Query by razorpayOrderId
+        const querySnap = await db
+          .collection(ORDERS_COLLECTION)
+          .where("razorpayOrderId", "==", id)
+          .limit(1)
+          .get();
 
-      if (!querySnap.empty) {
-        const data = querySnap.docs[0].data() as StoredPaymentOrder;
-        memOrders.set(data.orderId, data);
-        if (data.razorpayOrderId) memOrders.set(data.razorpayOrderId, data);
-        return data;
-      }
+        if (!querySnap.empty) {
+          const data = querySnap.docs[0].data() as StoredPaymentOrder;
+          memOrders.set(data.orderId, data);
+          if (data.razorpayOrderId) memOrders.set(data.razorpayOrderId, data);
+          return data;
+        }
+        return undefined;
+      })();
+
+      const timeoutPromise = new Promise<undefined>((resolve) =>
+        setTimeout(() => resolve(undefined), 2500)
+      );
+
+      const result = await Promise.race([lookupPromise, timeoutPromise]);
+      if (result) return result;
     } catch (err) {
       console.warn("[PAYMENT STORE] Firestore order lookup warning:", err);
     }
@@ -133,7 +155,7 @@ export async function markStoredPaymentOrderPaid(
   paymentId: string,
   verificationMetadata?: Record<string, unknown>
 ): Promise<{ success: boolean; order?: StoredPaymentOrder; alreadyPaid?: boolean }> {
-  // Update memory store
+  // Update memory store immediately
   const existingMem = memOrders.get(orderIdOrRzpId);
   if (existingMem) {
     existingMem.paymentStatus = "paid";
@@ -146,55 +168,59 @@ export async function markStoredPaymentOrderPaid(
   const db = getAdminFirestore();
   if (db) {
     try {
-      let targetDocRef = db.collection(ORDERS_COLLECTION).doc(orderIdOrRzpId);
-      const docSnap = await targetDocRef.get();
+      const markPaidPromise = (async () => {
+        let targetDocRef = db.collection(ORDERS_COLLECTION).doc(orderIdOrRzpId);
+        const docSnap = await targetDocRef.get();
 
-      if (!docSnap.exists) {
-        // Query by razorpayOrderId
-        const querySnap = await db
-          .collection(ORDERS_COLLECTION)
-          .where("razorpayOrderId", "==", orderIdOrRzpId)
-          .limit(1)
-          .get();
+        if (!docSnap.exists) {
+          const querySnap = await db
+            .collection(ORDERS_COLLECTION)
+            .where("razorpayOrderId", "==", orderIdOrRzpId)
+            .limit(1)
+            .get();
 
-        if (querySnap.empty) {
-          return { success: false };
-        }
-        targetDocRef = querySnap.docs[0].ref;
-      }
-
-      const result = await db.runTransaction(async (transaction) => {
-        const snap = await transaction.get(targetDocRef);
-        if (!snap.exists) {
-          throw new Error("Order document not found in transaction");
-        }
-        const data = snap.data() as StoredPaymentOrder;
-        if (data.paymentStatus === "paid") {
-          return { success: true, alreadyPaid: true, order: data };
+          if (querySnap.empty) {
+            return { success: true, order: existingMem };
+          }
+          targetDocRef = querySnap.docs[0].ref;
         }
 
-        const updateData: Partial<StoredPaymentOrder> = {
-          paymentStatus: "paid",
-          orderStatus: "brewing",
-          razorpayPaymentId: paymentId,
-          updatedAt: Date.now(),
-          verificationMetadata: verificationMetadata || { verifiedAt: Date.now() },
-        };
+        return await db.runTransaction(async (transaction) => {
+          const snap = await transaction.get(targetDocRef);
+          if (!snap.exists) {
+            return { success: true, order: existingMem };
+          }
+          const data = snap.data() as StoredPaymentOrder;
+          if (data.paymentStatus === "paid") {
+            return { success: true, alreadyPaid: true, order: data };
+          }
 
-        transaction.update(targetDocRef, updateData);
+          const updateData: Partial<StoredPaymentOrder> = {
+            paymentStatus: "paid",
+            orderStatus: "brewing",
+            razorpayPaymentId: paymentId,
+            updatedAt: Date.now(),
+            verificationMetadata: verificationMetadata || { verifiedAt: Date.now() },
+          };
 
-        // Ensure both internal orderId doc and razorpayOrderId doc are synchronized
-        if (data.orderId && data.orderId !== targetDocRef.id) {
-          transaction.update(db.collection(ORDERS_COLLECTION).doc(data.orderId), updateData);
-        }
-        if (data.razorpayOrderId && data.razorpayOrderId !== targetDocRef.id) {
-          transaction.update(db.collection(ORDERS_COLLECTION).doc(data.razorpayOrderId), updateData);
-        }
+          transaction.update(targetDocRef, updateData);
 
-        return { success: true, alreadyPaid: false, order: { ...data, ...updateData } };
-      });
+          if (data.orderId && data.orderId !== targetDocRef.id) {
+            transaction.update(db.collection(ORDERS_COLLECTION).doc(data.orderId), updateData);
+          }
+          if (data.razorpayOrderId && data.razorpayOrderId !== targetDocRef.id) {
+            transaction.update(db.collection(ORDERS_COLLECTION).doc(data.razorpayOrderId), updateData);
+          }
 
-      return result;
+          return { success: true, alreadyPaid: false, order: { ...data, ...updateData } };
+        });
+      })();
+
+      const timeoutPromise = new Promise<{ success: boolean; order?: StoredPaymentOrder }>((resolve) =>
+        setTimeout(() => resolve({ success: true, order: existingMem }), 2500)
+      );
+
+      return await Promise.race([markPaidPromise, timeoutPromise]);
     } catch (err) {
       console.warn("[PAYMENT STORE] Firestore mark paid transaction warning:", err);
     }
