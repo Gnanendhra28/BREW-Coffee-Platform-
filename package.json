@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node scripts/verify-all.mjs",
     "test:p49": "node scripts/verify-phase4-9-order-lifecycle.mjs",
+    "test:p50": "npx tsx scripts/verify-phase5-0-ai-agents.ts",
     "test:e2e": "playwright test",
     "deploy:gcp": "./scripts/deploy-gcp.sh"
   },
