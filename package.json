@@ -17,6 +17,7 @@
     "test:p49": "node scripts/verify-phase4-9-order-lifecycle.mjs",
     "test:p50": "npx tsx scripts/verify-phase5-0-ai-agents.ts",
     "test:p51": "node scripts/verify-phase5-1-razorpay-lifecycle.mjs",
+    "test:p52": "node scripts/verify-phase5-2-final-audit.mjs",
     "test:e2e": "playwright test",
     "deploy:gcp": "./scripts/deploy-gcp.sh"
   },
