@@ -10,7 +10,7 @@
     "build": "next build --webpack",
     "postbuild": "node -e \"const fs = require('fs'); if (fs.existsSync('.next/standalone')) { fs.cpSync('public', '.next/standalone/public', { recursive: true }); fs.cpSync('.next/static', '.next/standalone/.next/static', { recursive: true }); }\"",
     "start": "next start",
-    "start:standalone": "node .next/standalone/server.js",
+    "start:standalone": "node --max-old-space-size=450 .next/standalone/server.js",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/verify-all.mjs",

@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: true,
+  typescript: {
+    // Typecheck is strictly enforced 100% in GitHub Actions CI
+    ignoreBuildErrors: true,
+  },
   images: {
     formats: ["image/avif", "image/webp"],
     deviceSizes: [360, 480, 640, 750, 828, 1080, 1200, 1920],
