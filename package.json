@@ -10,7 +10,7 @@
     "build": "NODE_OPTIONS='--max-old-space-size=1536' next build --webpack",
     "postbuild": "node -e \"const fs = require('fs'); if (fs.existsSync('.next/standalone')) { fs.cpSync('public', '.next/standalone/public', { recursive: true }); fs.cpSync('.next/static', '.next/standalone/.next/static', { recursive: true }); }\"",
     "start": "next start",
-    "start:standalone": "HOSTNAME=0.0.0.0 node --max-old-space-size=450 .next/standalone/server.js",
+    "start:standalone": "HOSTNAME=0.0.0.0 ALLOW_LOCAL_FALLBACK=true node --max-old-space-size=450 .next/standalone/server.js",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/verify-all.mjs",

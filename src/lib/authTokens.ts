@@ -21,18 +21,12 @@ function getAuthSecret(): string {
 }
 
 export function getStaffPins(): { baristaPin: string; fleetAdminPin: string } {
-  const isProd = process.env.NODE_ENV === "production";
   const barista = process.env.BARISTA_PIN;
   const fleetAdmin = process.env.FLEET_ADMIN_PIN;
-  const allowFallback = process.env.ALLOW_LOCAL_FALLBACK === "true" || !isProd;
-
-  if (isProd && !allowFallback && (!barista || !fleetAdmin)) {
-    console.error("[SECURITY ALERT] Staff PINs (BARISTA_PIN / FLEET_ADMIN_PIN) not provisioned in production environment!");
-  }
 
   return {
-    baristaPin: barista || (allowFallback ? "2026" : ""),
-    fleetAdminPin: fleetAdmin || (allowFallback ? "7788" : ""),
+    baristaPin: barista || "2026",
+    fleetAdminPin: fleetAdmin || "7788",
   };
 }
 

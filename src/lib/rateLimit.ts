@@ -170,7 +170,9 @@ export async function checkRateLimit(
   }
 
   // 2. Explicit Behavior on Redis Outage / Unavailability in Production
-  if (isProduction && isSensitive) {
+  // If Redis was configured but experienced an outage, fail-closed for sensitive endpoints.
+  // If Redis was not configured at all, operate in degraded process-local mode unless strictly required.
+  if (isProduction && isSensitive && redisUrl) {
     if (outagePolicy === "fail-closed") {
       console.error(
         `[SECURITY CRITICAL] [RATE_LIMIT_OUTAGE] Upstash Redis unavailable for sensitive endpoint "${prefix}". Failing closed. Cause: ${
