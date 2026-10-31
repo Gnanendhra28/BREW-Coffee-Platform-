@@ -3,6 +3,7 @@ import {
   createSessionToken,
   verifySessionToken,
   getStaffPins,
+  verifyStaffPin,
   UserRole,
 } from "../../../../lib/authTokens";
 import { revokeSession, isSessionRevoked } from "../../../../lib/sessionRevocation";
@@ -84,14 +85,14 @@ export async function POST(req: NextRequest) {
     // 1. Staff PIN Authentication (for Barista or Fleet Admin)
     if (action === "staff_pin") {
       const { baristaPin, fleetAdminPin } = getStaffPins();
-      if (fleetAdminPin && pin === fleetAdminPin) {
+      if (typeof pin === "string" && fleetAdminPin && verifyStaffPin(pin, fleetAdminPin)) {
         determinedRole = "fleet_admin";
         finalUser = {
           uid: "staff-fleet-admin-1",
           displayName: "Fleet Commander",
           email: "fleet.admin@brew.cafe",
         };
-      } else if (baristaPin && pin === baristaPin) {
+      } else if (typeof pin === "string" && baristaPin && verifyStaffPin(pin, baristaPin)) {
         determinedRole = "barista";
         finalUser = {
           uid: "staff-barista-arjun",

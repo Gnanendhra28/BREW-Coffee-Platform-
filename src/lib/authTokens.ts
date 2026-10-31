@@ -21,13 +21,50 @@ function getAuthSecret(): string {
 }
 
 export function getStaffPins(): { baristaPin: string; fleetAdminPin: string } {
+  const isProd =
+    process.env.NODE_ENV === "production" &&
+    process.env.ALLOW_LOCAL_FALLBACK !== "true" &&
+    process.env.BREW_TEST_SUITE !== "true" &&
+    process.env.PLAYWRIGHT_TEST !== "true";
+
   const barista = process.env.BARISTA_PIN;
   const fleetAdmin = process.env.FLEET_ADMIN_PIN;
+
+  if (isProd) {
+    // In production, development PINs ('2026', '7788') are strictly prohibited
+    const safeBarista = barista && barista !== "2026" ? barista : "";
+    const safeFleetAdmin = fleetAdmin && fleetAdmin !== "7788" ? fleetAdmin : "";
+
+    if (barista === "2026" || fleetAdmin === "7788" || !barista || !fleetAdmin) {
+      console.error(
+        "[SECURITY CRITICAL] Staff PINs not configured or using prohibited development defaults in production! " +
+        "Staff authentication requires rotated BARISTA_PIN and FLEET_ADMIN_PIN environment variables."
+      );
+    }
+    return {
+      baristaPin: safeBarista,
+      fleetAdminPin: safeFleetAdmin,
+    };
+  }
 
   return {
     baristaPin: barista || "2026",
     fleetAdminPin: fleetAdmin || "7788",
   };
+}
+
+/**
+ * Constant-time PIN comparison across all runtimes (Edge, Node, Browser)
+ * to prevent timing-attack side channels.
+ */
+export function verifyStaffPin(submittedPin: string, expectedPin: string): boolean {
+  if (!submittedPin || !expectedPin) return false;
+  if (submittedPin.length !== expectedPin.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < submittedPin.length; i++) {
+    mismatch |= submittedPin.charCodeAt(i) ^ expectedPin.charCodeAt(i);
+  }
+  return mismatch === 0;
 }
 
 const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days

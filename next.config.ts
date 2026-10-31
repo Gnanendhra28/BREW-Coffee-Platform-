@@ -5,8 +5,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: true,
   typescript: {
-    // Typecheck is strictly enforced 100% in GitHub Actions CI
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   webpack: (config) => {
     config.resolve = config.resolve || {};

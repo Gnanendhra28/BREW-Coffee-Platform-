@@ -21,12 +21,10 @@ services:
         sync: false
       - key: AUTH_SECRET
         generateValue: true
-      - key: ALLOW_LOCAL_FALLBACK
-        value: "true"
       - key: BARISTA_PIN
-        value: "2026"
+        sync: false
       - key: FLEET_ADMIN_PIN
-        value: "7788"
+        sync: false
       - key: FIREBASE_PROJECT_ID
         value: "brew-2621e"
       - key: FIREBASE_SERVICE_ACCOUNT

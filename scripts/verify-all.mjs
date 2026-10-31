@@ -20,6 +20,7 @@ const testSuites = [
   { name: "Phase 4: Web Push Notifications & Hardware Buzzer", script: "scripts/verify-buzzer.mjs" },
   { name: "Phase 4.1: Production Blocker Resolution & Multi-Instance Security", script: "scripts/verify-phase4-1-blockers.mjs" },
   { name: "Phase 4.2: Security Consistency & Cross-Instance Verification", script: "scripts/verify-phase4-2-security.mjs" },
+  { name: "Phase 4.6.3: Post-Incident Security Hardening & Infrastructure Integrity", script: "scripts/verify-phase4-3-security-hardening.mjs" },
   { name: "Phase 5: Asset Optimization & Global Edge CDN", script: "scripts/verify-assets-cdn.mjs" },
   { name: "Phase 6: AI Agents Hardening, Rate Limiting & Zod", script: "scripts/verify-agents-hardening.mjs" },
   { name: "Phase 7: Observability, Sentry & System Health", script: "scripts/verify-observability.mjs" },
