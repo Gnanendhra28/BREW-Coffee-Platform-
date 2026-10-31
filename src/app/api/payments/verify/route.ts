@@ -11,8 +11,26 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body;
+    // 0. Payload Size Guard
+    const contentLength = req.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > 100 * 1024) {
+      return NextResponse.json(
+        { error: "Payload too large. Maximum request size is 100KB." },
+        { status: 413 }
+      );
+    }
+
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ error: "Malformed JSON payload" }, { status: 400 });
+    }
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body as {
+      razorpay_order_id?: string;
+      razorpay_payment_id?: string;
+      razorpay_signature?: string;
+    };
 
     // 1. Validate required identifiers
     if (!razorpay_order_id || typeof razorpay_order_id !== "string") {

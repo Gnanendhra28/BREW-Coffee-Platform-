@@ -40,6 +40,15 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    // 0. Payload Size Guard
+    const contentLength = req.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > 100 * 1024) {
+      return NextResponse.json(
+        { error: "Payload too large. Maximum request size is 100KB." },
+        { status: 413 }
+      );
+    }
+
     // Rate limit session attempts (max 15 attempts / 60 seconds per IP, sensitive in production)
     const clientIp = getClientIp(req);
     const rateLimit = await checkRateLimit(clientIp, "auth-session", 15, 60, {

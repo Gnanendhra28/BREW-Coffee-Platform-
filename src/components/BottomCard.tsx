@@ -115,7 +115,7 @@ export const BottomCard: React.FC<BottomCardProps> = ({
         </div>
       </motion.div>
 
-      {/* 3. Footer Links: Board, Reviews, Coffee news, Socials */}
+      {/* 3. Footer Links: Board, Reviews, Coffee news, Socials, Privacy, Terms */}
       <div className="w-full max-w-[1200px] flex flex-wrap items-center justify-start gap-6 sm:gap-8 pt-6 px-4 text-xs sm:text-sm text-[#9E8E82] tracking-wider">
         <a
           href="/board"
@@ -140,6 +140,18 @@ export const BottomCard: React.FC<BottomCardProps> = ({
           className="underline underline-offset-4 decoration-white/25 hover:decoration-white hover:text-[#F4EFE6] transition-colors duration-200"
         >
           Menu
+        </a>
+        <a
+          href="/privacy"
+          className="underline underline-offset-4 decoration-white/25 hover:decoration-white hover:text-[#F4EFE6] transition-colors duration-200"
+        >
+          Privacy Policy
+        </a>
+        <a
+          href="/terms"
+          className="underline underline-offset-4 decoration-white/25 hover:decoration-white hover:text-[#F4EFE6] transition-colors duration-200"
+        >
+          Terms of Service
         </a>
       </div>
     </footer>

@@ -108,6 +108,15 @@ const FlashDealChangedPayloadSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    // 0. Payload Size Guard
+    const contentLength = req.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > 100 * 1024) {
+      return NextResponse.json(
+        { error: "Payload too large. Maximum request size is 100KB." },
+        { status: 413 }
+      );
+    }
+
     // 1. IP Rate Limiting (30 events per 60 seconds per IP, sensitive in production)
     const clientIp = getClientIp(req);
     const rateLimit = await checkRateLimit(clientIp, "realtime-event", 30, 60, {

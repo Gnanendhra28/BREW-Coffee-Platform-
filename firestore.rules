@@ -29,6 +29,9 @@ rules_version = '2';
 //   - future_stops: Mobile coffee van tour schedule
 //   - curbside_arrivals: Drive-by/curbside pickup alerts
 //   - reviews: Customer feedback and ratings (1-5)
+//   - payment_orders: Server-authoritative order ledger
+//   - processed_webhooks: Webhook deduplication store
+//   - revoked_sessions: Durable token revocation store
 // ===============================================================
 
 service cloud.firestore {
@@ -90,65 +93,74 @@ service cloud.firestore {
     // Collection Rules
     // ===============================================================
 
-    // Orders collection: Allow reads and writes for real-time order lifecycle
+    // Orders collection: Public client order placement with server-authoritative lifecycle
     match /orders/{orderId} {
       allow read: if true;
-      allow create: if request.resource.data.orderNumber is string;
-      allow update: if true;
-      allow delete: if request.auth != null;
+      allow create: if request.resource.data.orderNumber is string &&
+        request.resource.data.totalAmount is number &&
+        (!('paymentStatus' in request.resource.data) || request.resource.data.paymentStatus != 'paid') &&
+        (!('status' in request.resource.data) || request.resource.data.status in ['pending', 'received']);
+      allow update, delete: if false; // All status updates and mutations MUST route through the authenticated server hub (/api/realtime/events)
     }
     
-    // Inventory: Real-time stock readings and deductions
+    // Inventory: Real-time stock readings (server-authoritative deductions)
     match /inventory/{docId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if false;
     }
 
-    // Van Location and Status
+    // Van Location and Status: Real-time telemetry (server-authoritative updates)
     match /vans/{vanId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if false;
     }
 
-    // Future stops tour schedule
+    // Future stops tour schedule: Public tour itinerary (server-authoritative updates)
     match /future_stops/{stopId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if false;
     }
 
-    // Curbside alerts
+    // Curbside alerts: Guest arrival notifications for barista pickup queue
     match /curbside_arrivals/{orderId} {
       allow read: if true;
-      allow write: if true;
+      allow create, update: if request.resource.data.orderId is string &&
+        request.resource.data.vehicleInfo is string;
+      allow delete: if false;
     }
 
-    // Reviews collection
+    // Reviews collection: Verified guest reviews and ratings
     match /reviews/{reviewId} {
       allow read: if true;
-      allow create: if request.resource.data.rating >= 1 && request.resource.data.rating <= 5;
-      allow update, delete: if request.auth != null;
+      allow create: if request.resource.data.rating is number &&
+        request.resource.data.rating >= 1 &&
+        request.resource.data.rating <= 5 &&
+        request.resource.data.authorName is string;
+      allow update, delete: if false;
     }
 
-    // Van Requests / Catering Enquiries: Server-Authoritative Pipeline
-    // Public submissions and staff queries are strictly mediated by /api/request-van via Firebase Admin SDK.
-    // Direct client SDK creation, reading, modification, and deletion are completely denied to eliminate client attack surface.
+    // ===============================================================
+    // Server-Authoritative Collections (Admin SDK only, client denied)
+    // ===============================================================
+
+    // Van Requests / Catering Enquiries: Server-Authoritative Pipeline (/api/request-van)
     match /van_requests/{requestId} {
-      allow read, write: if false; // Server Admin SDK only
+      allow read, write: if false;
     }
 
     // Payment Orders: Server-authoritative order ledger
     match /payment_orders/{orderId} {
-      allow read, write: if false; // Server Admin SDK only
+      allow read, write: if false;
     }
 
     // Processed Webhooks: Ledger for payment webhook deduplication
     match /processed_webhooks/{eventId} {
-      allow read, write: if false; // Server Admin SDK only
+      allow read, write: if false;
     }
 
     // Revoked Sessions: Durable token revocation ledger
     match /revoked_sessions/{sid} {
-      allow read, write: if false; // Server Admin SDK only
+      allow read, write: if false;
     }
   }
 }
