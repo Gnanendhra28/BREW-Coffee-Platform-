@@ -77,10 +77,17 @@ async function runPaymentTests() {
 
   // TEST 2: Payment Signature Verification via /api/payments/verify
   console.log("\n[Test 2] Testing /api/payments/verify API...");
+  const testPaymentId = "pay_test_98723498";
+  const rzpKeySecret = process.env.RAZORPAY_KEY_SECRET || "brew_razorpay_secret_test_2026";
+  const validPaymentSignature = crypto
+    .createHmac("sha256", rzpKeySecret)
+    .update(`${orderData.orderId}|${testPaymentId}`)
+    .digest("hex");
+
   const verifyPayload = JSON.stringify({
     razorpay_order_id: orderData.orderId,
-    razorpay_payment_id: "pay_test_98723498",
-    razorpay_signature: "simulated_signature",
+    razorpay_payment_id: testPaymentId,
+    razorpay_signature: validPaymentSignature,
   });
 
   const res2 = await makeRequest(

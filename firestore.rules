@@ -1,6 +1,95 @@
 rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: van_requests
+// Document ID: {requestId} (auto-generated or unique enquiry ID)
+// Fields:
+//   - contact: string (required, 3-150 chars) - Customer email or phone number
+//   - organization: string (required, 1-150 chars) - College, corporate park, or company name
+//   - location: string (required, 1-200 chars) - Event or campus location
+//   - crowdSize: string (1-100 chars) or number (> 0, <= 100000) - Estimated guest count
+//   - timestamp: timestamp or string (1-100 chars) - Submission time
+//   - notes: string (optional, <= 2000 chars) - Additional requirements or instructions
+//   - eventDate: string (optional, <= 100 chars) - Preferred date or timeframe
+//   - status: string (optional, <= 50 chars) - Workflow status (e.g. pending, contacted, confirmed)
+//   - businessEmail: string (optional, <= 150 chars) - Target recipient business email
+//   - emailSent: bool (optional) - Dispatch confirmation flag
+//   - quotation: map (optional) - AI instant concierge quotation data
+//   - id: string (optional, <= 100 chars) - Request identifier
+//   - createdAt: timestamp or string (optional, <= 100 chars) - Record creation timestamp
+//   - updatedAt: timestamp or string (optional, <= 100 chars) - Record update timestamp
+//
+// Existing Collections Preserved:
+//   - orders: Real-time customer orders
+//   - inventory: Real-time stock readings and deductions
+//   - vans: Mobile coffee van live GPS & service state
+//   - future_stops: Mobile coffee van tour schedule
+//   - curbside_arrivals: Drive-by/curbside pickup alerts
+//   - reviews: Customer feedback and ratings (1-5)
+// ===============================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions & Domain Validators
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isValidVanRequest(data) {
+      return data.keys().hasAll(['contact', 'organization', 'location', 'crowdSize', 'timestamp']) &&
+        data.keys().hasOnly([
+          'contact',
+          'organization',
+          'location',
+          'crowdSize',
+          'timestamp',
+          'notes',
+          'eventDate',
+          'status',
+          'businessEmail',
+          'emailSent',
+          'quotation',
+          'id',
+          'idempotencyKey',
+          'fingerprint',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.contact is string && data.contact.size() >= 3 && data.contact.size() <= 150 &&
+        data.organization is string && data.organization.size() >= 1 && data.organization.size() <= 150 &&
+        data.location is string && data.location.size() >= 1 && data.location.size() <= 200 &&
+        (
+          (data.crowdSize is string && data.crowdSize.size() >= 1 && data.crowdSize.size() <= 100) ||
+          (data.crowdSize is number && data.crowdSize > 0 && data.crowdSize <= 100000)
+        ) &&
+        (
+          data.timestamp is timestamp ||
+          (data.timestamp is string && data.timestamp.size() >= 1 && data.timestamp.size() <= 100)
+        ) &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000)) &&
+        (!('eventDate' in data) || (data.eventDate is string && data.eventDate.size() <= 100)) &&
+        (!('status' in data) || (data.status is string && data.status.size() <= 50)) &&
+        (!('businessEmail' in data) || (data.businessEmail is string && data.businessEmail.size() <= 150)) &&
+        (!('emailSent' in data) || (data.emailSent is bool)) &&
+        (!('quotation' in data) || (data.quotation is map)) &&
+        (!('id' in data) || (data.id is string && data.id.size() <= 100)) &&
+        (!('idempotencyKey' in data) || (data.idempotencyKey is string && data.idempotencyKey.size() <= 120)) &&
+        (!('fingerprint' in data) || (data.fingerprint is string && data.fingerprint.size() <= 120)) &&
+        (!('createdAt' in data) || (data.createdAt is timestamp || (data.createdAt is string && data.createdAt.size() <= 100))) &&
+        (!('updatedAt' in data) || (data.updatedAt is timestamp || (data.updatedAt is string && data.updatedAt.size() <= 100)));
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
     // Orders collection: Allow reads and writes for real-time order lifecycle
     match /orders/{orderId} {
       allow read: if true;
@@ -38,6 +127,28 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.resource.data.rating >= 1 && request.resource.data.rating <= 5;
       allow update, delete: if request.auth != null;
+    }
+
+    // Van Requests / Catering Enquiries: Server-Authoritative Pipeline
+    // Public submissions and staff queries are strictly mediated by /api/request-van via Firebase Admin SDK.
+    // Direct client SDK creation, reading, modification, and deletion are completely denied to eliminate client attack surface.
+    match /van_requests/{requestId} {
+      allow read, write: if false; // Server Admin SDK only
+    }
+
+    // Payment Orders: Server-authoritative order ledger
+    match /payment_orders/{orderId} {
+      allow read, write: if false; // Server Admin SDK only
+    }
+
+    // Processed Webhooks: Ledger for payment webhook deduplication
+    match /processed_webhooks/{eventId} {
+      allow read, write: if false; // Server Admin SDK only
+    }
+
+    // Revoked Sessions: Durable token revocation ledger
+    match /revoked_sessions/{sid} {
+      allow read, write: if false; // Server Admin SDK only
     }
   }
 }

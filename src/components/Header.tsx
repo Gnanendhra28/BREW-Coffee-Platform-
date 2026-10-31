@@ -16,6 +16,8 @@ import {
   ClipboardList,
   ExternalLink,
   Star,
+  Menu,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
@@ -38,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   const { user, openAuthModal, signOutUser } = useAuth();
   const { totalItems } = useCart();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const displayCartCount = propCartCount !== undefined ? Math.max(propCartCount, totalItems) : totalItems;
@@ -298,7 +301,51 @@ export const Header: React.FC<HeaderProps> = ({
         >
           {displayCartCount > 0 ? "View Cart" : "Order Now"}
         </button>
+
+        {/* Mobile Hamburger Toggle */}
+        <button
+          onClick={() => setMobileMenuOpen((prev) => !prev)}
+          aria-label={mobileMenuOpen ? "Close Menu" : "Open Menu"}
+          className="md:hidden w-9 h-9 rounded-full flex items-center justify-center bg-black/30 text-[#F4EFE6]/90 hover:text-white hover:bg-white/10 border border-white/10 transition-colors cursor-pointer"
+        >
+          {mobileMenuOpen ? (
+            <X className="w-4 h-4" />
+          ) : (
+            <Menu className="w-4 h-4" />
+          )}
+        </button>
       </div>
+
+      {/* Mobile Navigation Drawer */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className="absolute top-20 left-4 right-4 bg-[#24170F]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.8)] p-3 md:hidden flex flex-col gap-1.5 z-50 text-xs"
+          >
+            {navItems.map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                onClick={(e) => {
+                  setMobileMenuOpen(false);
+                  handleNavClick(e, item.href);
+                }}
+                className={`px-4 py-2.5 rounded-xl font-medium transition-colors ${
+                  item.active
+                    ? "bg-[#3D2619] text-[#DFAB6C] font-semibold border border-[#DFAB6C]/30"
+                    : "text-[#EDE4DA] hover:bg-white/10"
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.header>
   );
 };

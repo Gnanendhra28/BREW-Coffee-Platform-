@@ -121,3 +121,33 @@ class StructuredLogger {
 }
 
 export const logger = new StructuredLogger();
+
+/**
+ * PII Masking Utilities
+ * Ensures customer personal data (phone numbers, emails) is never emitted in raw form to logs.
+ */
+export function maskEmail(email: string): string {
+  if (!email || !email.includes("@")) return "[MASKED_EMAIL]";
+  const [local, domain] = email.split("@");
+  if (local.length <= 2) {
+    return `${local[0] || "*"}***@${domain}`;
+  }
+  return `${local[0]}***${local[local.length - 1]}@${domain}`;
+}
+
+export function maskPhone(phone: string): string {
+  if (!phone) return "[MASKED_PHONE]";
+  const cleaned = phone.trim();
+  if (cleaned.length <= 4) return "****";
+  const start = cleaned.slice(0, 3);
+  const end = cleaned.slice(-3);
+  return `${start}****${end}`;
+}
+
+export function maskContact(contact: string): string {
+  if (!contact) return "[MASKED_CONTACT]";
+  if (contact.includes("@")) {
+    return maskEmail(contact);
+  }
+  return maskPhone(contact);
+}

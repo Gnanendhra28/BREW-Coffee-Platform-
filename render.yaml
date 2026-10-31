@@ -1,0 +1,55 @@
+services:
+  - type: web
+    name: brew-coffee-platform
+    env: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:standalone
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: NEXT_TELEMETRY_DISABLED
+        value: 1
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=450"
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: BARISTA_PIN
+        value: "2026"
+      - key: FLEET_ADMIN_PIN
+        value: "7788"
+      - key: FIREBASE_PROJECT_ID
+        value: "brew-2621e"
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_API_KEY
+        sync: false
+      - key: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+        value: "brew-2621e.firebaseapp.com"
+      - key: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+        value: "brew-2621e"
+      - key: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+        value: "brew-2621e.firebasestorage.app"
+      - key: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+        value: "441735836076"
+      - key: NEXT_PUBLIC_FIREBASE_APP_ID
+        value: "1:441735836076:web:c1a8bc25eeda26284f0a09"
+      - key: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+        value: "G-VHM7D2CZK3"

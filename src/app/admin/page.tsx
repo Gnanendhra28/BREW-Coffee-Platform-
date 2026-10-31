@@ -468,8 +468,9 @@ export default function FleetAdminPage() {
                 <p className="text-xs text-white/50 mb-3">
                   Used by mobile van baristas to unlock order queues on iPad/tablet KDS.
                 </p>
-                <div className="p-3 bg-black/40 rounded-lg border border-white/10 font-mono text-sm text-[#c49a45] font-bold">
-                  Current PIN: 2026
+                <div className="p-3 bg-black/40 rounded-lg border border-white/10 font-mono text-xs text-[#c49a45] flex items-center justify-between">
+                  <span>Status: SECURED VIA ENVIRONMENT</span>
+                  <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/20 px-2 py-0.5 rounded">ACTIVE</span>
                 </div>
               </div>
 
@@ -478,8 +479,9 @@ export default function FleetAdminPage() {
                 <p className="text-xs text-white/50 mb-3">
                   Grants full administrative clearance across all tour schedules and deals.
                 </p>
-                <div className="p-3 bg-black/40 rounded-lg border border-white/10 font-mono text-sm text-[#c49a45] font-bold">
-                  Current PIN: 7788
+                <div className="p-3 bg-black/40 rounded-lg border border-white/10 font-mono text-xs text-[#c49a45] flex items-center justify-between">
+                  <span>Status: SECURED VIA GCP SECRET MANAGER</span>
+                  <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/20 px-2 py-0.5 rounded">ACTIVE</span>
                 </div>
               </div>
             </div>

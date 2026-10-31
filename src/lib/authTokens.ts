@@ -10,16 +10,38 @@ export interface SessionPayload {
   role: UserRole;
   issuedAt: number;
   expiresAt: number;
+  sid?: string; // Unique Session ID for durable cross-instance revocation
 }
 
-const AUTH_SECRET = process.env.AUTH_SECRET || "brew-platform-secure-jwt-hmac-secret-key-2026";
+function getAuthSecret(): string {
+  if (process.env.NODE_ENV === "production" && !process.env.AUTH_SECRET) {
+    throw new Error("[SECURITY CRITICAL] AUTH_SECRET environment variable is strictly required in production!");
+  }
+  return process.env.AUTH_SECRET || "brew-platform-secure-jwt-hmac-secret-key-2026";
+}
+
+export function getStaffPins(): { baristaPin: string; fleetAdminPin: string } {
+  const isProd = process.env.NODE_ENV === "production";
+  const barista = process.env.BARISTA_PIN;
+  const fleetAdmin = process.env.FLEET_ADMIN_PIN;
+
+  if (isProd && (!barista || !fleetAdmin)) {
+    console.error("[SECURITY ALERT] Staff PINs (BARISTA_PIN / FLEET_ADMIN_PIN) not provisioned in production environment!");
+  }
+
+  return {
+    baristaPin: barista || (isProd ? "" : "2026"),
+    fleetAdminPin: fleetAdmin || (isProd ? "" : "7788"),
+  };
+}
+
 const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 async function getHmacKey(): Promise<CryptoKey> {
   const enc = new TextEncoder();
   return crypto.subtle.importKey(
     "raw",
-    enc.encode(AUTH_SECRET),
+    enc.encode(getAuthSecret()),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign", "verify"]
@@ -47,8 +69,13 @@ export async function createSessionToken(
     email: string | null;
     displayName: string | null;
     role?: UserRole;
+    sid?: string;
   }
 ): Promise<string> {
+  const sid =
+    user.sid ||
+    `sess_${Date.now()}_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 6)}`;
+
   const payload: SessionPayload = {
     uid: user.uid,
     email: user.email,
@@ -56,6 +83,7 @@ export async function createSessionToken(
     role: user.role || "customer",
     issuedAt: Date.now(),
     expiresAt: Date.now() + SESSION_MAX_AGE_MS,
+    sid,
   };
 
   const payloadStr = JSON.stringify(payload);

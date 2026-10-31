@@ -162,7 +162,41 @@ async function runAuthVerification() {
     console.log("✓ PASS: Fleet Admin PIN grants full access to /admin console!");
   }
 
-  console.log("\n🎉 ALL 7 AUTHENTICATION & RBAC TESTS PASSED WITH 100% SUCCESS!");
+  // TEST 8: Privilege Escalation Prevention (Security Hotfix)
+  console.log("\n[Test 8] Testing Privilege Escalation Prevention (claiming staff roles without PIN)...");
+  const t8a = await makeRequest(
+    {
+      hostname: "127.0.0.1",
+      port: 3000,
+      path: "/api/auth/session",
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    },
+    JSON.stringify({ role: "fleet_admin", user: { uid: "attacker-1", displayName: "Attacker" } })
+  );
+  console.log(`Self-assigned fleet_admin status: ${t8a.statusCode}, body: ${t8a.body}`);
+  if (t8a.statusCode !== 403) {
+    throw new Error(`Privilege escalation not blocked! Expected 403, got ${t8a.statusCode}`);
+  }
+  console.log("✓ PASS: Direct fleet_admin role self-assignment blocked with 403 Forbidden!");
+
+  const t8b = await makeRequest(
+    {
+      hostname: "127.0.0.1",
+      port: 3000,
+      path: "/api/auth/session",
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    },
+    JSON.stringify({ role: "barista", user: { uid: "attacker-2", displayName: "Attacker" } })
+  );
+  console.log(`Self-assigned barista status: ${t8b.statusCode}, body: ${t8b.body}`);
+  if (t8b.statusCode !== 403) {
+    throw new Error(`Privilege escalation not blocked! Expected 403, got ${t8b.statusCode}`);
+  }
+  console.log("✓ PASS: Direct barista role self-assignment blocked with 403 Forbidden!");
+
+  console.log("\n🎉 ALL 8 AUTHENTICATION & RBAC TESTS PASSED WITH 100% SUCCESS!");
 }
 
 runAuthVerification().catch((e) => {

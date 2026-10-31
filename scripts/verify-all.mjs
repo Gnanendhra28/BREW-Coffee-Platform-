@@ -5,6 +5,9 @@ import { execSync, spawn } from "node:child_process";
 import http from "node:http";
 
 const testSuites = [
+  { name: "Phase 1: Cloud Persistence, Reliability & Security Hotfix", script: "scripts/verify-phase1-reliability-and-security.mjs" },
+  { name: "Phase 2: Complete Application Security & Payment Integrity", script: "scripts/verify-phase2-security.mjs" },
+  { name: "Phase 2.1: Production Data Architecture & Cloud Firestore", script: "scripts/verify-phase2-1-production-data.mjs" },
   { name: "Phase 1: Real-Time Cloud Database & SSE", script: "scripts/verify-realtime.mjs" },
   { name: "Inventory Sentinel: Burn Rate & Stockout Engine", script: "scripts/verify-sentinel.mjs" },
   { name: "Curbside Expediter: Virtual Drive-Thru & Extraction Sync", script: "scripts/verify-curbside.mjs" },
@@ -15,6 +18,8 @@ const testSuites = [
   { name: "Phase 2: Authentication & RBAC Edge Security", script: "scripts/verify-auth.mjs" },
   { name: "Phase 3: Payments Gateway & WhatsApp Receipts", script: "scripts/verify-payments.mjs" },
   { name: "Phase 4: Web Push Notifications & Hardware Buzzer", script: "scripts/verify-buzzer.mjs" },
+  { name: "Phase 4.1: Production Blocker Resolution & Multi-Instance Security", script: "scripts/verify-phase4-1-blockers.mjs" },
+  { name: "Phase 4.2: Security Consistency & Cross-Instance Verification", script: "scripts/verify-phase4-2-security.mjs" },
   { name: "Phase 5: Asset Optimization & Global Edge CDN", script: "scripts/verify-assets-cdn.mjs" },
   { name: "Phase 6: AI Agents Hardening, Rate Limiting & Zod", script: "scripts/verify-agents-hardening.mjs" },
   { name: "Phase 7: Observability, Sentry & System Health", script: "scripts/verify-observability.mjs" },
@@ -61,11 +66,27 @@ async function runAll() {
     serverProcess = hasStandalone
       ? spawn("node", [".next/standalone/server.js"], {
           stdio: "pipe",
-          env: { ...process.env, PORT: "3000" },
+          env: {
+            ...process.env,
+            PORT: "3000",
+            BREW_TEST_SUITE: "true",
+            ALLOW_LOCAL_FALLBACK: "true",
+            BARISTA_PIN: process.env.BARISTA_PIN || "2026",
+            FLEET_ADMIN_PIN: process.env.FLEET_ADMIN_PIN || "7788",
+            AUTH_SECRET: process.env.AUTH_SECRET || "brew-platform-secure-jwt-hmac-secret-key-2026",
+          },
         })
       : spawn("npm", ["run", "start"], {
           stdio: "pipe",
-          env: { ...process.env, PORT: "3000" },
+          env: {
+            ...process.env,
+            PORT: "3000",
+            BREW_TEST_SUITE: "true",
+            ALLOW_LOCAL_FALLBACK: "true",
+            BARISTA_PIN: process.env.BARISTA_PIN || "2026",
+            FLEET_ADMIN_PIN: process.env.FLEET_ADMIN_PIN || "7788",
+            AUTH_SECRET: process.env.AUTH_SECRET || "brew-platform-secure-jwt-hmac-secret-key-2026",
+          },
         });
 
     const ready = await checkServerReady(3000, 30000);

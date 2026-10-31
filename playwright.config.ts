@@ -21,12 +21,19 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-    webServer: process.env.PLAYWRIGHT_TEST_BASE_URL
+  webServer: process.env.PLAYWRIGHT_TEST_BASE_URL
     ? undefined
     : {
         command: 'node .next/standalone/server.js',
         url: 'http://localhost:3000',
         reuseExistingServer: !process.env.CI,
         timeout: 120 * 1000,
+        env: {
+          BARISTA_PIN: process.env.BARISTA_PIN || '2026',
+          FLEET_ADMIN_PIN: process.env.FLEET_ADMIN_PIN || '7788',
+          AUTH_SECRET: process.env.AUTH_SECRET || 'brew-platform-secure-jwt-hmac-secret-key-2026',
+          ALLOW_LOCAL_FALLBACK: 'true',
+          PLAYWRIGHT_TEST: 'true',
+        },
       },
 });

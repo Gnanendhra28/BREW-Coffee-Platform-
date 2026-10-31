@@ -1,6 +1,8 @@
 // Digital Receipt & Instant WhatsApp/SMS Notification Dispatcher
 // Formats professional branded digital receipts with live buzzer links.
 
+import { maskPhone } from "./observability/logger";
+
 export interface ReceiptOrderDetails {
   orderId: string;
   orderNumber: string;
@@ -78,7 +80,8 @@ export async function dispatchDigitalReceipt(order: ReceiptOrderDetails): Promis
 
   // In production with Twilio/Gupshup/WhatsApp Business API:
   // await sendWhatsAppBusinessMessage(order.customerPhone, receiptText);
-  console.log(`[RECEIPT DISPATCHER] Digital receipt generated for ${order.customerName} (${order.customerPhone || "No phone"}):`);
+  const masked = order.customerPhone ? maskPhone(order.customerPhone) : "No phone";
+  console.log(`[RECEIPT DISPATCHER] Digital receipt generated for ${order.customerName} (${masked}):`);
   console.log(`Order #${order.orderNumber} -> ${trackingUrl}`);
 
   return {

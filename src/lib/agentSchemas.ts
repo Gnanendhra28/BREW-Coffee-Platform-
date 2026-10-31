@@ -97,6 +97,51 @@ export const EventQuotationSchema = z.object({
 
 export type EventQuotationOutput = z.infer<typeof EventQuotationSchema>;
 
+// 4b. Customer Van Catering Request Input Schema
+export const VanRequestInputSchema = z.object({
+  contact: z
+    .string()
+    .trim()
+    .min(3, "Contact must be at least 3 characters")
+    .max(150, "Contact must not exceed 150 characters")
+    .refine((val) => {
+      // Must be a valid email or a valid phone number (at least 7 digits)
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+      const isPhone = /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]{7,15}$/.test(val.replace(/\s+/g, ""));
+      return isEmail || isPhone;
+    }, "Contact must be a valid email address or phone number"),
+  organization: z
+    .string()
+    .trim()
+    .min(1, "Organization / College / Host name is required")
+    .max(150, "Organization name must not exceed 150 characters"),
+  location: z
+    .string()
+    .trim()
+    .min(1, "Location / City is required")
+    .max(200, "Location must not exceed 200 characters"),
+  eventDate: z
+    .string()
+    .trim()
+    .max(100, "Date string must not exceed 100 characters")
+    .default("Flexible"),
+  crowdSize: z
+    .union([z.string().trim().max(100), z.number().int().positive()])
+    .default("Not Specified"),
+  notes: z
+    .string()
+    .trim()
+    .max(2000, "Notes must not exceed 2000 characters")
+    .default(""),
+  idempotencyKey: z
+    .string()
+    .trim()
+    .max(100)
+    .optional(),
+});
+
+export type VanRequestInput = z.infer<typeof VanRequestInputSchema>;
+
 // 5. Hyper-Local Hype Broadcaster Agent Schema
 export const SocialBroadcastPostSchema = z.object({
   platform: z.enum(["WhatsApp Status", "Instagram Story", "Twitter / X", "SMS Alert"]),

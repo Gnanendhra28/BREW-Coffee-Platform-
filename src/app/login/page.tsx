@@ -224,28 +224,13 @@ function LoginContent() {
                     maxLength={6}
                     value={pin}
                     onChange={(e) => setPin(e.target.value)}
-                    placeholder="Enter Staff PIN (Default: 2026)"
+                    placeholder="Enter 4-digit Staff PIN"
                     className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-center tracking-[0.4em] text-lg font-mono focus:border-[#c49a45] focus:outline-none transition-colors"
                   />
                 </div>
                 {pinError && (
                   <p className="text-red-400 text-xs mt-1.5 text-center">{pinError}</p>
                 )}
-              </div>
-
-              {/* Quick Preset Buttons for rapid testing */}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPin("2026");
-                    handlePinSubmit(undefined, "2026");
-                  }}
-                  className="flex-1 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-white/80 transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <Sparkles className="w-3 h-3 text-[#c49a45]" />
-                  <span>Preset PIN (2026)</span>
-                </button>
               </div>
 
               <button
@@ -281,27 +266,13 @@ function LoginContent() {
                     maxLength={6}
                     value={pin}
                     onChange={(e) => setPin(e.target.value)}
-                    placeholder="Enter Admin PIN (Default: 7788)"
+                    placeholder="Enter 4-digit Fleet Admin PIN"
                     className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-center tracking-[0.4em] text-lg font-mono focus:border-[#c49a45] focus:outline-none transition-colors"
                   />
                 </div>
                 {pinError && (
                   <p className="text-red-400 text-xs mt-1.5 text-center">{pinError}</p>
                 )}
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPin("7788");
-                    handlePinSubmit(undefined, "7788");
-                  }}
-                  className="flex-1 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-white/80 transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <Sparkles className="w-3 h-3 text-[#c49a45]" />
-                  <span>Preset Admin PIN (7788)</span>
-                </button>
               </div>
 
               <button

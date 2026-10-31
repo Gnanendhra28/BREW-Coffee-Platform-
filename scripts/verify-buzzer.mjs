@@ -79,6 +79,7 @@ async function runBuzzerTests() {
       headers: {
         "Content-Type": "application/json",
         "Content-Length": Buffer.byteLength(triggerPayload),
+        "x-staff-pin": "2026",
       },
     },
     triggerPayload
@@ -112,6 +113,7 @@ async function runBuzzerTests() {
       headers: {
         "Content-Type": "application/json",
         "Content-Length": Buffer.byteLength(invalidPayload),
+        "x-staff-pin": "2026",
       },
     },
     invalidPayload

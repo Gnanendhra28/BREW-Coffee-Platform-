@@ -21,6 +21,8 @@ import {
   X,
   Store,
   MessageSquare,
+  CreditCard,
+  Wallet,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Header } from "@/components/Header";
@@ -53,6 +55,7 @@ export default function CartPage() {
   const [baristaNotes, setBaristaNotes] = useState("");
   const [pickupType, setPickupType] = useState<"walkup" | "curbside">("walkup");
   const [vehicleInfo, setVehicleInfo] = useState("");
+  const [paymentMode, setPaymentMode] = useState<"outlet" | "online">("outlet");
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [orderConfirmed, setOrderConfirmed] = useState(false);
   const [confirmedOrderId, setConfirmedOrderId] = useState("");
@@ -93,6 +96,51 @@ export default function CartPage() {
     }
   };
 
+  const completeSuccessOrder = (
+    newOrderId: string,
+    paidTxnId: string,
+    method: string,
+    customerName: string,
+    phone: string
+  ) => {
+    const receiptText = formatWhatsAppReceipt({
+      orderId: newOrderId,
+      orderNumber: newOrderId.replace(/^ord-/, "").split("-")[0] || "101",
+      customerName,
+      customerPhone: phone,
+      items: items.map((i) => ({ name: i.name, price: i.price, quantity: i.quantity })),
+      totalAmount: finalTotal,
+      vanLocationName: vanLocation.spotName,
+      paymentId: paidTxnId,
+      pickupType,
+      vehicleInfo,
+      createdAt: Date.now(),
+    });
+    const waUrl = getWhatsAppReceiptUrl(phone, receiptText);
+
+    setDigitalReceiptUrl(waUrl);
+    setPaymentId(paidTxnId);
+    setConfirmedOrderId(newOrderId);
+    setOrderConfirmed(true);
+    setIsPlacingOrder(false);
+
+    analytics.trackOrderCompleted({
+      id: newOrderId,
+      totalAmount: finalTotal,
+      pickupType,
+      itemCount: totalItems,
+    });
+
+    confetti({
+      particleCount: 80,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ["#DFAB6C", "#C88C50", "#F4EFE6", "#FFFFFF"],
+    });
+
+    clearCart();
+  };
+
   const handlePlaceOrder = async () => {
     if (items.length === 0) return;
 
@@ -102,57 +150,144 @@ export default function CartPage() {
     const customerName = guestName.trim() || user?.displayName || "Sanctuary Guest";
     const phone = customerPhone.trim();
 
+    if (paymentMode === "outlet") {
+      try {
+        const newOrderId = createOrder({
+          customerName,
+          customerPhone: phone,
+          items: [...items],
+          notes: baristaNotes,
+          totalAmount: finalTotal,
+          pickupType,
+          vehicleInfo: pickupType === "curbside" ? vehicleInfo : undefined,
+          vanLocationName: vanLocation.spotName,
+          paymentStatus: "pending",
+          paymentMethod: "Pay at Outlet",
+        });
+
+        completeSuccessOrder(newOrderId, "Pay Upon Collection", "Pay at Outlet", customerName, phone);
+      } catch (err: unknown) {
+        setIsPlacingOrder(false);
+        const msg = err instanceof Error ? err.message : "Failed to place order. Please try again.";
+        setPaymentError(msg);
+      }
+      return;
+    }
+
+    // Online Payment via Razorpay
     try {
-      // Counter / Outlet payment
-      const newOrderId = createOrder({
-        customerName,
-        customerPhone: phone,
-        items: [...items],
-        notes: baristaNotes,
-        totalAmount: finalTotal,
-        pickupType,
-        vehicleInfo: pickupType === "curbside" ? vehicleInfo : undefined,
-        vanLocationName: vanLocation.spotName,
-        paymentStatus: "pending",
-        paymentMethod: "Pay at Outlet",
+      // 1. Create order on authoritative server
+      const createRes = await fetch("/api/payments/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((i) => ({ id: i.id, quantity: i.quantity })),
+          promoCode: promoDiscount > 0 ? promoCode : undefined,
+          isMember: !!user,
+          customerName,
+          customerPhone: phone,
+          vanLocationName: vanLocation.spotName,
+          amount: finalTotal,
+        }),
       });
 
-      const receiptText = formatWhatsAppReceipt({
-        orderId: newOrderId,
-        orderNumber: newOrderId.replace(/^ord-/, "").split("-")[0] || "101",
-        customerName,
-        customerPhone: phone,
-        items: items.map((i) => ({ name: i.name, price: i.price, quantity: i.quantity })),
-        totalAmount: finalTotal,
-        vanLocationName: vanLocation.spotName,
-        paymentId: "Pay at Outlet",
-        pickupType,
-        vehicleInfo,
-        createdAt: Date.now(),
+      if (!createRes.ok) {
+        const errorData = await createRes.json();
+        throw new Error(errorData.error || "Failed to initiate online order with payment gateway.");
+      }
+
+      const rzpData = await createRes.json();
+
+      // 2. Load Razorpay Checkout Script
+      const loadRzp = () =>
+        new Promise<boolean>((resolve) => {
+          if (typeof window === "undefined") return resolve(false);
+          const win = window as unknown as { Razorpay?: unknown };
+          if (win.Razorpay) return resolve(true);
+          const s = document.createElement("script");
+          s.src = "https://checkout.razorpay.com/v1/checkout.js";
+          s.onload = () => resolve(true);
+          s.onerror = () => resolve(false);
+          document.body.appendChild(s);
+        });
+
+      const scriptLoaded = await loadRzp();
+      const win = typeof window !== "undefined" ? (window as unknown as { Razorpay?: new (opts: unknown) => { open: () => void; on: (event: string, cb: (res: unknown) => void) => void } }) : null;
+
+      if (!scriptLoaded || !win?.Razorpay) {
+        throw new Error("Unable to load secure Razorpay modal. Please choose 'Pay at Outlet' or try again.");
+      }
+
+      const rzp = new win.Razorpay({
+        key: rzpData.keyId,
+        amount: rzpData.amount,
+        currency: rzpData.currency || "INR",
+        name: "BREW Mobile Coffee",
+        description: `Order #${rzpData.internalOrderId || rzpData.orderId}`,
+        order_id: rzpData.orderId,
+        prefill: {
+          name: customerName,
+          contact: phone,
+        },
+        theme: { color: "#DFAB6C" },
+        handler: async function (response: {
+          razorpay_payment_id: string;
+          razorpay_order_id: string;
+          razorpay_signature: string;
+        }) {
+          try {
+            // 3. Cryptographic Signature Verification
+            const verifyRes = await fetch("/api/payments/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id || rzpData.orderId,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+
+            const verifyData = await verifyRes.json();
+
+            if (verifyRes.ok && verifyData.verified) {
+              const assignedOrderId = createOrder({
+                customerName,
+                customerPhone: phone,
+                items: [...items],
+                notes: baristaNotes,
+                totalAmount: finalTotal,
+                pickupType,
+                vehicleInfo: pickupType === "curbside" ? vehicleInfo : undefined,
+                vanLocationName: vanLocation.spotName,
+                paymentStatus: "paid",
+                paymentId: response.razorpay_payment_id,
+                paymentMethod: "Razorpay (Online)",
+              });
+              completeSuccessOrder(assignedOrderId, response.razorpay_payment_id, "Razorpay Online", customerName, phone);
+            } else {
+              setPaymentError(verifyData.error || "Payment verification failed. Please contact barista at the window.");
+              setIsPlacingOrder(false);
+            }
+          } catch {
+            setPaymentError("Network error during payment verification. Please check with van barista.");
+            setIsPlacingOrder(false);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setIsPlacingOrder(false);
+            setPaymentError("Payment was cancelled. Your items remain in the cart.");
+          },
+        },
       });
-      const waUrl = getWhatsAppReceiptUrl(phone, receiptText);
 
-      setDigitalReceiptUrl(waUrl);
-      setPaymentId("Pay Upon Collection");
-      setConfirmedOrderId(newOrderId);
-      setOrderConfirmed(true);
-      setIsPlacingOrder(false);
-
-      analytics.trackOrderCompleted({
-        id: newOrderId,
-        totalAmount: finalTotal,
-        pickupType,
-        itemCount: totalItems,
+      rzp.on("payment.failed", function (resp: unknown) {
+        setIsPlacingOrder(false);
+        const errObj = resp as { error?: { description?: string } };
+        setPaymentError(errObj?.error?.description || "Payment failed at gateway. Please try another card/UPI or Pay at Outlet.");
       });
 
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ["#DFAB6C", "#C88C50", "#F4EFE6", "#FFFFFF"],
-      });
-
-      clearCart();
+      rzp.open();
     } catch (err: unknown) {
       setIsPlacingOrder(false);
       const msg = err instanceof Error ? err.message : "Failed to place order. Please try again.";
@@ -625,6 +760,52 @@ export default function CartPage() {
                   </div>
                 </div>
 
+                {/* Payment Method Selector */}
+                <div className="mb-6 space-y-2">
+                  <span className="text-xs uppercase tracking-wider font-semibold text-[#8C7C70] block">
+                    Select Payment Method
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMode("outlet")}
+                      className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between gap-1 cursor-pointer ${
+                        paymentMode === "outlet"
+                          ? "bg-[#DFAB6C]/15 border-[#DFAB6C] text-white shadow-md"
+                          : "bg-black/30 border-white/10 text-[#8C7C70] hover:text-white hover:bg-white/5"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <Wallet className="w-4 h-4 text-[#DFAB6C]" />
+                        {paymentMode === "outlet" && <span className="w-2 h-2 rounded-full bg-[#DFAB6C]" />}
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold">Pay at Outlet</p>
+                        <p className="text-[10px] text-[#8C7C70]">Cash / QR on pickup</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMode("online")}
+                      className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between gap-1 cursor-pointer ${
+                        paymentMode === "online"
+                          ? "bg-[#DFAB6C]/15 border-[#DFAB6C] text-white shadow-md"
+                          : "bg-black/30 border-white/10 text-[#8C7C70] hover:text-white hover:bg-white/5"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <CreditCard className="w-4 h-4 text-[#DFAB6C]" />
+                        {paymentMode === "online" && <span className="w-2 h-2 rounded-full bg-[#DFAB6C]" />}
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold">Pay Online</p>
+                        <p className="text-[10px] text-[#8C7C70]">UPI / Cards (Razorpay)</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Est Prep time */}
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-black/30 border border-white/5 text-xs text-[#8C7C70] mb-6">
                   <Clock className="w-4 h-4 text-[#DFAB6C] shrink-0" />
@@ -647,12 +828,14 @@ export default function CartPage() {
                   {isPlacingOrder ? (
                     <>
                       <div className="w-4 h-4 border-2 border-[#1A110B] border-t-transparent rounded-full animate-spin" />
-                      <span>Placing Order & Sending to Van KDS...</span>
+                      <span>{paymentMode === "online" ? "Connecting to Payment Gateway..." : "Placing Order & Sending to Van KDS..."}</span>
                     </>
                   ) : (
                     <>
                       <span>
-                        Place Order & Pay at Outlet (₹{finalTotal.toLocaleString("en-IN")})
+                        {paymentMode === "online"
+                          ? `Pay Online via Razorpay (₹${finalTotal.toLocaleString("en-IN")})`
+                          : `Place Order & Pay at Outlet (₹${finalTotal.toLocaleString("en-IN")})`}
                       </span>
                       <ChevronRight className="w-4 h-4" />
                     </>

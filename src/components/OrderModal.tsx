@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Plus, Minus, Check, Coffee } from "lucide-react";
+import { X, Plus, Minus, Coffee, ArrowRight } from "lucide-react";
 import confetti from "canvas-confetti";
+import { useCart } from "@/context/CartContext";
 
 interface OrderModalProps {
   isOpen: boolean;
@@ -23,7 +25,7 @@ interface MenuItem {
 
 const MENU_ITEMS: MenuItem[] = [
   {
-    id: "cappuccino",
+    id: "c-3",
     name: "Cappuccino",
     price: 220,
     rating: 4.9,
@@ -32,7 +34,7 @@ const MENU_ITEMS: MenuItem[] = [
       "20% espresso, 40% velvety steamed milk, 40% airy milk foam. Balanced and smooth.",
   },
   {
-    id: "latte",
+    id: "c-7",
     name: "Latte",
     price: 240,
     rating: 5.0,
@@ -41,7 +43,7 @@ const MENU_ITEMS: MenuItem[] = [
       "30% espresso and 70% fresh hot milk. Perfect for a creamy coffee treat.",
   },
   {
-    id: "mocha",
+    id: "c-8",
     name: "Mocha",
     price: 260,
     rating: 4.7,
@@ -50,7 +52,7 @@ const MENU_ITEMS: MenuItem[] = [
       "20% espresso, 50% hot milk, 30% single-origin premium dark chocolate.",
   },
   {
-    id: "espresso",
+    id: "c-5",
     name: "Double Espresso",
     price: 180,
     rating: 4.8,
@@ -65,10 +67,21 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   onClose,
   setCartCount,
 }) => {
+  const router = useRouter();
+  const { addItem, updateQuantity } = useCart();
   const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [ordered, setOrdered] = useState(false);
 
   const handleIncrement = (id: string) => {
+    const item = MENU_ITEMS.find((m) => m.id === id);
+    if (item) {
+      addItem({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        image: `/assets/coffee/${item.id === "c-3" ? "cappuccino" : item.id === "c-7" ? "latte" : item.id === "c-8" ? "mocha" : "expresso"}.webp`,
+        category: "Coffee",
+      });
+    }
     setQuantities((prev) => ({
       ...prev,
       [id]: (prev[id] || 0) + 1,
@@ -77,6 +90,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   };
 
   const handleDecrement = (id: string) => {
+    updateQuantity(id, -1);
     setQuantities((prev) => {
       const cur = prev[id] || 0;
       if (cur <= 1) {
@@ -95,19 +109,14 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   }, 0);
 
   const handleCheckout = () => {
-    setOrdered(true);
     confetti({
-      particleCount: 70,
-      spread: 70,
+      particleCount: 50,
+      spread: 60,
       origin: { y: 0.6 },
       colors: ["#C88C50", "#F4EFE6", "#FFFFFF"],
     });
-    setTimeout(() => {
-      setOrdered(false);
-      setQuantities({});
-      setCartCount(0);
-      onClose();
-    }, 2200);
+    onClose();
+    router.push("/cart");
   };
 
   if (!isOpen) return null;
@@ -129,25 +138,11 @@ export const OrderModal: React.FC<OrderModalProps> = ({
             <X className="w-4 h-4" />
           </button>
 
-          {ordered ? (
-            <div className="text-center py-10">
-              <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto mb-4">
-                <Check className="w-8 h-8" />
-              </div>
-              <h3 className="font-serif text-2xl text-[#F4EFE6] font-normal mb-2">
-                Order Received
-              </h3>
-              <p className="text-xs text-[#8C7C70] max-w-xs mx-auto">
-                Our master barista is preparing your handcrafted roast with
-                utmost care.
-              </p>
+          <div>
+            <div className="flex items-center gap-2 mb-1 text-[#C88C50] text-xs uppercase tracking-widest font-semibold">
+              <Coffee className="w-4 h-4" />
+              <span>Handcrafted Selections</span>
             </div>
-          ) : (
-            <div>
-              <div className="flex items-center gap-2 mb-1 text-[#C88C50] text-xs uppercase tracking-widest font-semibold">
-                <Coffee className="w-4 h-4" />
-                <span>Handcrafted Selections</span>
-              </div>
               <h3 className="font-serif text-2xl text-[#F4EFE6] font-normal mb-5">
                 BREW Quick Order
               </h3>
@@ -222,13 +217,13 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                 <button
                   disabled={total === 0}
                   onClick={handleCheckout}
-                  className="rounded-full bg-[#F4EFE6] disabled:opacity-40 disabled:hover:bg-[#F4EFE6] text-[#1A110B] px-7 py-2.5 text-xs sm:text-sm font-semibold hover:bg-white transition-all shadow-lg"
+                  className="rounded-full bg-[#DFAB6C] disabled:opacity-40 hover:bg-white text-[#1A110B] px-6 py-2.5 text-xs sm:text-sm font-bold transition-all shadow-lg flex items-center gap-1.5 cursor-pointer"
                 >
-                  Place Order
+                  <span>Proceed to Checkout</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
-          )}
         </motion.div>
       </div>
     </AnimatePresence>
