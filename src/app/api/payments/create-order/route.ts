@@ -239,7 +239,7 @@ export async function POST(req: NextRequest) {
         });
 
         if (!rzpRes.ok) {
-          const errorData = await rzpRes.json();
+          const errorData = await rzpRes.json().catch(() => ({}));
           console.warn("Razorpay API rejected credentials or request:", errorData);
           if (process.env.ALLOW_LOCAL_FALLBACK === "true" || process.env.NODE_ENV !== "production") {
             // Fall back to simulation gateway so unverified / placeholder keys don't brick the app demo
@@ -251,15 +251,15 @@ export async function POST(req: NextRequest) {
             await saveStoredPaymentOrder(pendingOrder);
 
             return NextResponse.json(
-              { error: errorData.error?.description || "Failed to create Razorpay order" },
+              { error: (errorData as { error?: { description?: string } }).error?.description || "Failed to create Razorpay order" },
               { status: rzpRes.status }
             );
           }
+        } else {
+          const rzpOrder = await rzpRes.json();
+          finalOrderId = rzpOrder.id;
+          isLiveGateway = true;
         }
-
-        const rzpOrder = await rzpRes.json();
-        finalOrderId = rzpOrder.id;
-        isLiveGateway = true;
       } catch (rzpErr) {
         // Network/gateway exception
         pendingOrder.paymentStatus = "failed";
