@@ -48,6 +48,7 @@ Configure environment variables in `.env.local` for local development, or in the
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | Client Firebase | Firebase Web App ID | Client Bundle |
 | `NEXT_PUBLIC_RAZORPAY_KEY_ID` | Client Payments | Public key ID provided to the checkout modal | Client Bundle |
 | `ALLOW_LOCAL_FALLBACK` | Testing Only | Set to `true` during local offline testing to permit in-memory cache | Dev / Test |
+| `VOICE_BOOKING_ENABLED` | Feature Flag | Enables Phase 6 Voice Booking & outbound communication (Defaults to `false`) | Server |
 
 ---
 
