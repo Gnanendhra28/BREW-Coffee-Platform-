@@ -113,10 +113,29 @@ export interface StructuredExtractionResult {
   rawResponse?: string;
 }
 
+export interface QuotationMaterialSnapshot {
+  guestCount: number;
+  eventDate: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  durationHours: number;
+  venueAddress: string;
+  selectedTier: "BASIC" | "STANDARD" | "PREMIUM" | null;
+  eventType: string | null;
+  hash: string; // Canonical SHA-256 hash of material fields
+  generatedAt: string; // Strict ISO 8601 UTC
+}
+
+export interface QuotationIntegrityResult {
+  isMatch: boolean;
+  mismatchedFields: string[];
+  reason?: string;
+}
+
 export interface ConfirmationSafetyEvaluation {
   isConfirmed: boolean;
   intent: ConfirmationIntent;
   reason: string;
+  integrityResult?: QuotationIntegrityResult;
 }
 
 export interface StaffAuthorizationContext {
@@ -140,6 +159,7 @@ export interface VoiceBookingSession {
   state: VoiceBookingState;
   requirements: BookingRequirements;
   quotation: EventQuotationRecord | null;
+  quotationSnapshot?: QuotationMaterialSnapshot | null;
   conversationHistory: ConversationMessage[];
   createdAt: string; // Strict ISO 8601 UTC
   updatedAt: string; // Strict ISO 8601 UTC

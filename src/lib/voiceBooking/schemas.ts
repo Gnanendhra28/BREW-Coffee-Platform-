@@ -163,6 +163,18 @@ export const ConversationMessageSchema = z.object({
   timestamp: StrictIsoUtcSchema,
 });
 
+export const QuotationMaterialSnapshotSchema = z.object({
+  guestCount: z.number().int().min(10, "Minimum guest count is 10").max(1000, "Maximum guest count is 1000"),
+  eventDate: CalendarDateSchema,
+  startTime: Time24Schema,
+  durationHours: z.number().min(1, "Minimum duration is 1 hour").max(12, "Maximum duration is 12 hours"),
+  venueAddress: z.string().trim().min(3, "Venue address must be at least 3 characters"),
+  selectedTier: z.enum(["BASIC", "STANDARD", "PREMIUM"]).nullable(),
+  eventType: z.string().trim().nullable(),
+  hash: z.string().min(1),
+  generatedAt: StrictIsoUtcSchema,
+});
+
 export const VoiceBookingSessionSchema = z.object({
   id: z.string().min(1),
   phoneNumber: PhoneNumberSchema,
@@ -170,6 +182,7 @@ export const VoiceBookingSessionSchema = z.object({
   state: VoiceBookingStateSchema,
   requirements: BookingRequirementsSchema,
   quotation: z.any().nullable(),
+  quotationSnapshot: QuotationMaterialSnapshotSchema.nullable().optional().default(null),
   conversationHistory: z.array(ConversationMessageSchema),
   createdAt: StrictIsoUtcSchema,
   updatedAt: StrictIsoUtcSchema,

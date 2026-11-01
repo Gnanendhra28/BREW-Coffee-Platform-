@@ -12,6 +12,7 @@ import {
   ConversationTurnResult,
   CustomerClearableField,
   ExtractionProvider,
+  QuotationMaterialSnapshot,
   RequirementCorrectionRecord,
   StaffAuthorizationContext,
   StructuredExtractionResult,
@@ -32,9 +33,11 @@ import {
   getPromptForNextMissingField,
 } from "./prompts";
 import {
+  createQuotationSnapshot,
   formatQuotationMessage,
   generateVoiceBookingQuotation,
   validateQuotationRequirements,
+  verifyQuotationIntegrity,
 } from "./quotationAdapter";
 import {
   classifyConfirmationIntent,
@@ -44,6 +47,7 @@ import { InMemoryVoiceSessionRepository } from "./repositories/sessionRepository
 import {
   ConversationMessageSchema,
   CustomerClearableFieldSchema,
+  StaffAuthorizationContextSchema,
   VoiceBookingSessionSchema,
 } from "./schemas";
 
@@ -86,6 +90,7 @@ export function createVoiceBookingSession(
       corrections: [],
     },
     quotation: null,
+    quotationSnapshot: null,
     conversationHistory: [],
     createdAt: now,
     updatedAt: now,
@@ -110,6 +115,7 @@ const MATERIAL_FIELDS = [
   "durationHours",
   "venueAddress",
   "selectedTier",
+  "eventType",
 ] as const;
 
 /**
@@ -124,6 +130,7 @@ export function evaluateConfirmationSafetyGate(params: {
   hasValidQuotation: boolean;
   activeQuotationGuestCount?: number;
   currentRequirements: BookingRequirements;
+  quotationSnapshot?: QuotationMaterialSnapshot | null;
 }): ConfirmationSafetyEvaluation {
   const {
     userUtterance,
@@ -132,6 +139,7 @@ export function evaluateConfirmationSafetyGate(params: {
     hasValidQuotation,
     activeQuotationGuestCount,
     currentRequirements,
+    quotationSnapshot,
   } = params;
 
   // Deterministic utterance classification (Safety policy applied identically to Mock and Gemini)
@@ -155,8 +163,30 @@ export function evaluateConfirmationSafetyGate(params: {
     };
   }
 
-  // Gate 2: Quotation Matching Check (No unquoted requirement modifications)
-  if (
+  // If customer is NOT attempting positive confirmation, preserve their true classified intent
+  // (e.g. clarification question, ambiguous conversational remark, or modification request)
+  if (deterministicIntent !== "positive_acceptance") {
+    return {
+      isConfirmed: false,
+      intent: deterministicIntent,
+      reason: `Utterance classified deterministically as '${deterministicIntent}', not 'positive_acceptance'.`,
+    };
+  }
+
+  // Gate 2: Full Quotation Snapshot Integrity Check
+  // Compares all 7 material fields (guestCount, eventDate, startTime, durationHours, venueAddress, selectedTier, eventType)
+  // and validates the canonical SHA-256 hash. Rejects if requirements diverged from the presented quotation.
+  if (quotationSnapshot) {
+    const integrity = verifyQuotationIntegrity(quotationSnapshot, currentRequirements);
+    if (!integrity.isMatch) {
+      return {
+        isConfirmed: false,
+        intent: "modification_requested",
+        reason: integrity.reason || `Quotation snapshot integrity check failed. Material fields modified: ${integrity.mismatchedFields.join(", ")}. Re-quotation required.`,
+        integrityResult: integrity,
+      };
+    }
+  } else if (
     activeQuotationGuestCount !== undefined &&
     currentRequirements.guestCount !== undefined &&
     activeQuotationGuestCount !== currentRequirements.guestCount
@@ -448,6 +478,7 @@ export async function processConversationTurn(
   // If a material field changed after quotation was presented, invalidate quotation & confirmation
   if (materialChangeOccurred && activeSession.quotation !== null) {
     activeSession.quotation = null;
+    activeSession.quotationSnapshot = null;
     activeSession.requirements.customerConfirmed = false;
     if (
       activeSession.state === "quotation_presented" ||
@@ -495,6 +526,7 @@ export async function processConversationTurn(
         // Deterministic Quotation Generation
         const quotation = generateVoiceBookingQuotation(activeSession.requirements, activeSession.id);
         activeSession.quotation = quotation;
+        activeSession.quotationSnapshot = createQuotationSnapshot(activeSession.requirements);
 
         activeSession.state = transitionVoiceBookingState(activeSession.state, "quotation_presented");
         activeSession.state = transitionVoiceBookingState(activeSession.state, "awaiting_customer_confirmation");
@@ -507,6 +539,7 @@ export async function processConversationTurn(
     case "details_collected": {
       const quotation = generateVoiceBookingQuotation(activeSession.requirements, activeSession.id);
       activeSession.quotation = quotation;
+      activeSession.quotationSnapshot = createQuotationSnapshot(activeSession.requirements);
       activeSession.state = transitionVoiceBookingState(activeSession.state, "quotation_presented");
       activeSession.state = transitionVoiceBookingState(activeSession.state, "awaiting_customer_confirmation");
       assistantResponse = formatQuotationMessage(quotation, activeSession.language);
@@ -532,6 +565,7 @@ export async function processConversationTurn(
         hasValidQuotation: activeSession.quotation !== null,
         activeQuotationGuestCount: activeSession.quotation?.guestCount,
         currentRequirements: activeSession.requirements,
+        quotationSnapshot: activeSession.quotationSnapshot,
       });
 
       if (safetyEvaluation.isConfirmed) {
@@ -550,6 +584,7 @@ export async function processConversationTurn(
         if (activeSession.requirements.missingFields.length === 0) {
           const newQuote = generateVoiceBookingQuotation(activeSession.requirements, activeSession.id);
           activeSession.quotation = newQuote;
+          activeSession.quotationSnapshot = createQuotationSnapshot(activeSession.requirements);
           assistantResponse = formatQuotationMessage(newQuote, activeSession.language);
         } else {
           const nextMissing = activeSession.requirements.missingFields[0];
@@ -680,13 +715,33 @@ export async function approveBookingByStaff(
     );
   }
 
-  const { staffIdentity, staffRole, staffApprovalId } = authContext;
+  // Check unauthorized role early to provide specific RBAC diagnostic message
+  if (
+    authContext.staffRole &&
+    typeof authContext.staffRole === "string" &&
+    !AUTHORIZED_STAFF_ROLES.has(authContext.staffRole)
+  ) {
+    throw new Error(
+      `Unauthorized staff approval attempt: role '${authContext.staffRole}' is not permitted to approve catering bookings. Permitted roles: barista, fleet_admin, admin.`
+    );
+  }
 
-  if (!staffIdentity || typeof staffIdentity !== "string" || staffIdentity.trim().length === 0) {
+  // Strict Runtime Validation using StaffAuthorizationContextSchema
+  const schemaResult = StaffAuthorizationContextSchema.safeParse(authContext);
+  if (!schemaResult.success) {
+    const errorDetails = schemaResult.error.issues
+      .map((i) => `${i.path.join(".") || "context"}: ${i.message}`)
+      .join("; ");
+    throw new Error(`Staff authorization failure: invalid StaffAuthorizationContext (${errorDetails})`);
+  }
+
+  const { staffIdentity, staffRole, staffApprovalId } = schemaResult.data;
+
+  if (!staffIdentity || staffIdentity.trim().length === 0) {
     throw new Error("Staff authorization failure: missing or empty authenticated staffIdentity.");
   }
 
-  if (!staffRole || typeof staffRole !== "string" || staffRole.trim().length === 0) {
+  if (!staffRole || staffRole.trim().length === 0) {
     throw new Error("Staff authorization failure: missing authenticated staffRole.");
   }
 
@@ -696,7 +751,7 @@ export async function approveBookingByStaff(
     );
   }
 
-  if (!staffApprovalId || typeof staffApprovalId !== "string" || staffApprovalId.trim().length === 0) {
+  if (!staffApprovalId || staffApprovalId.trim().length === 0) {
     throw new Error("Staff authorization failure: missing staffApprovalId audit identifier.");
   }
 

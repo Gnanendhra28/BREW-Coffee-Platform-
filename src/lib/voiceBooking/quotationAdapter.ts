@@ -5,9 +5,15 @@
  * boundaries, and start/end times before generating auditable catering quotations.
  */
 
+import crypto from "crypto";
 import { generateEventQuotationRecord } from "../eventBookingConcierge/quoteEngine";
 import { EventQuotationRecord, EventType, ServiceLevel } from "../eventBookingConcierge/types";
-import { BookingRequirements, SupportedLanguage } from "./types";
+import {
+  BookingRequirements,
+  QuotationIntegrityResult,
+  QuotationMaterialSnapshot,
+  SupportedLanguage,
+} from "./types";
 import { isValidCalendarDate, isValidTime24 } from "./schemas";
 
 /**
@@ -184,4 +190,119 @@ export function formatQuotationMessage(
     `3. VIP Unlimited Bar: ₹${premium?.pricePerGuest || 360}/guest (Total: ₹${premium?.totalAmount.toLocaleString("en-IN")})\n` +
     `Would you like to confirm one of these packages, or speak with our concierge team?`
   );
+}
+
+/**
+ * Generates a deterministic canonical snapshot and SHA-256 hash of the exact requirements
+ * that affect quotation pricing and validity:
+ * - guestCount
+ * - eventDate
+ * - startTime
+ * - durationHours
+ * - venueAddress
+ * - selectedTier
+ * - eventType (influences consumption calculations in quoteEngine)
+ */
+export function createQuotationSnapshot(
+  requirements: BookingRequirements,
+  generatedAt: string = new Date().toISOString()
+): QuotationMaterialSnapshot {
+  const guestCount = requirements.guestCount ?? 0;
+  const eventDate = requirements.eventDate ?? "";
+  const startTime = requirements.startTime ?? "";
+  const durationHours = requirements.durationHours ?? 0;
+  const venueAddress = (requirements.venueAddress || "").trim();
+  const selectedTier = requirements.selectedTier ?? null;
+  const eventType = requirements.eventType ? requirements.eventType.trim() : null;
+
+  // Canonical object with sorted keys for deterministic SHA-256 hash calculation
+  const canonicalObject = {
+    durationHours,
+    eventDate,
+    eventType: eventType ? normalizeEventType(eventType) : "corporate",
+    guestCount,
+    selectedTier,
+    startTime,
+    venueAddress: venueAddress.toLowerCase(),
+  };
+
+  const canonicalString = JSON.stringify(canonicalObject, Object.keys(canonicalObject).sort());
+  const hash = crypto.createHash("sha256").update(canonicalString).digest("hex");
+
+  return {
+    guestCount,
+    eventDate,
+    startTime,
+    durationHours,
+    venueAddress,
+    selectedTier,
+    eventType,
+    hash,
+    generatedAt,
+  };
+}
+
+/**
+ * Compares a saved quotation snapshot against current booking requirements.
+ * Verifies all 7 material fields affecting pricing, logistics, and operational feasibility.
+ * Rejects confirmation if any material field was modified since the quotation was generated.
+ */
+export function verifyQuotationIntegrity(
+  snapshot: QuotationMaterialSnapshot | null | undefined,
+  currentRequirements: BookingRequirements
+): QuotationIntegrityResult {
+  if (!snapshot) {
+    return {
+      isMatch: false,
+      mismatchedFields: ["snapshot_missing"],
+      reason: "No quotation snapshot exists for this session.",
+    };
+  }
+
+  const mismatchedFields: string[] = [];
+
+  if (snapshot.guestCount !== (currentRequirements.guestCount ?? 0)) {
+    mismatchedFields.push("guestCount");
+  }
+  if (snapshot.eventDate !== (currentRequirements.eventDate ?? "")) {
+    mismatchedFields.push("eventDate");
+  }
+  if (snapshot.startTime !== (currentRequirements.startTime ?? "")) {
+    mismatchedFields.push("startTime");
+  }
+  if (snapshot.durationHours !== (currentRequirements.durationHours ?? 0)) {
+    mismatchedFields.push("durationHours");
+  }
+  if (
+    (snapshot.venueAddress || "").trim().toLowerCase() !==
+    (currentRequirements.venueAddress || "").trim().toLowerCase()
+  ) {
+    mismatchedFields.push("venueAddress");
+  }
+
+  // Tier integrity:
+  // If snapshot had a specific tier selected, changing it to a different tier is a mismatch.
+  // If snapshot had no tier selected (null), selecting one of the 3 quoted tiers is permissible.
+  if (snapshot.selectedTier !== null && snapshot.selectedTier !== currentRequirements.selectedTier) {
+    mismatchedFields.push("selectedTier");
+  }
+
+  const snapNormEvent = normalizeEventType(snapshot.eventType);
+  const currNormEvent = normalizeEventType(currentRequirements.eventType);
+  if (snapNormEvent !== currNormEvent) {
+    mismatchedFields.push("eventType");
+  }
+
+  if (mismatchedFields.length > 0) {
+    return {
+      isMatch: false,
+      mismatchedFields,
+      reason: `Quotation snapshot integrity check failed. Material fields modified since quote generation: ${mismatchedFields.join(", ")}. Re-quotation required.`,
+    };
+  }
+
+  return {
+    isMatch: true,
+    mismatchedFields: [],
+  };
 }
