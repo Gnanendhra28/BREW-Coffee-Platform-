@@ -390,10 +390,14 @@ export class MockExtractionProvider implements ExtractionProvider {
 export class GeminiExtractionProvider implements ExtractionProvider {
   private fallback: MockExtractionProvider;
   private readonly timeoutMs: number;
+  private readonly apiKey?: string;
+  private readonly model?: string;
 
-  constructor(options?: { timeoutMs?: number }) {
+  constructor(options?: { timeoutMs?: number; apiKey?: string; model?: string }) {
     this.fallback = new MockExtractionProvider();
     this.timeoutMs = options?.timeoutMs || 8000;
+    this.apiKey = options?.apiKey;
+    this.model = options?.model;
   }
 
   async detectLanguage(
@@ -409,8 +413,8 @@ export class GeminiExtractionProvider implements ExtractionProvider {
     language: SupportedLanguage
   ): Promise<StructuredExtractionResult> {
     const isProduction = process.env.NODE_ENV === "production";
-    const apiKey = process.env.GEMINI_API_KEY;
-    const model = process.env.VOICE_AGENT_MODEL;
+    const apiKey = this.apiKey || process.env.GEMINI_API_KEY;
+    const model = this.model || process.env.VOICE_AGENT_MODEL || "gemini-2.5-flash";
 
     // Fail-closed in production if credentials or model identifier are missing
     if (!apiKey || !model) {
@@ -483,8 +487,6 @@ Return pure JSON with no markdown formatting. Do not include any extra fields.`;
         }),
         signal: controller.signal,
       });
-
-      clearTimeout(timeoutHandle);
 
       if (response.status === 429) {
         return {
@@ -569,7 +571,6 @@ Return pure JSON with no markdown formatting. Do not include any extra fields.`;
         clearedFields: validatedData.clearedFields,
       };
     } catch (err: unknown) {
-      clearTimeout(timeoutHandle);
       const isAbort = (err as Error)?.name === "AbortError";
       return {
         status: "api_failure",
@@ -580,6 +581,8 @@ Return pure JSON with no markdown formatting. Do not include any extra fields.`;
           ? `Gemini request timed out after ${this.timeoutMs}ms.`
           : "Network failure communicating with Gemini API.",
       };
+    } finally {
+      clearTimeout(timeoutHandle);
     }
   }
 }

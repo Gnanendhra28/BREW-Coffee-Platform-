@@ -1,16 +1,19 @@
 /**
- * BREW Coffee Platform — Phase 6.2.1 AI Conversation Engine
+ * BREW Coffee Platform — Phase 6.2.2 AI Conversation Engine
  * Orchestrates multi-turn conversation intelligence for the AI Voice Booking Agent.
- * Hardened with immutable session boundaries, structured patch merging,
- * strict confirmation intent classification, and authenticated staff approval boundaries.
+ * Hardened with fail-closed staff authorization, deterministic confirmation safety gate,
+ * strict customer-clearable field allowlisting, and session immutability.
  */
 
 import {
   BookingRequirements,
+  ConfirmationSafetyEvaluation,
   ConversationMessage,
   ConversationTurnResult,
+  CustomerClearableField,
   ExtractionProvider,
   RequirementCorrectionRecord,
+  StaffAuthorizationContext,
   StructuredExtractionResult,
   SupportedLanguage,
   VoiceBookingSession,
@@ -33,10 +36,14 @@ import {
   generateVoiceBookingQuotation,
   validateQuotationRequirements,
 } from "./quotationAdapter";
-import { MockExtractionProvider } from "./providers/extractionProvider";
+import {
+  classifyConfirmationIntent,
+  MockExtractionProvider,
+} from "./providers/extractionProvider";
 import { InMemoryVoiceSessionRepository } from "./repositories/sessionRepository";
 import {
   ConversationMessageSchema,
+  CustomerClearableFieldSchema,
   VoiceBookingSessionSchema,
 } from "./schemas";
 
@@ -106,8 +113,112 @@ const MATERIAL_FIELDS = [
 ] as const;
 
 /**
+ * Evaluates customer confirmation against an explicit, deterministic confirmation safety gate.
+ * Applies the exact same safety policy for Mock and Gemini extraction providers.
+ * Fails closed on low confidence, extraction failure, quotation invalidation, or ambiguous language.
+ */
+export function evaluateConfirmationSafetyGate(params: {
+  userUtterance: string;
+  language: SupportedLanguage;
+  extractionResult: StructuredExtractionResult;
+  hasValidQuotation: boolean;
+  activeQuotationGuestCount?: number;
+  currentRequirements: BookingRequirements;
+}): ConfirmationSafetyEvaluation {
+  const {
+    userUtterance,
+    language,
+    extractionResult,
+    hasValidQuotation,
+    activeQuotationGuestCount,
+    currentRequirements,
+  } = params;
+
+  // Deterministic utterance classification (Safety policy applied identically to Mock and Gemini)
+  const deterministicIntent = classifyConfirmationIntent(userUtterance, language);
+
+  // Rejection is always honored, even if quotation is missing or invalidated
+  if (deterministicIntent === "rejection" || extractionResult.confirmationIntent === "rejection") {
+    return {
+      isConfirmed: false,
+      intent: "rejection",
+      reason: "Customer explicitly rejected quotation.",
+    };
+  }
+
+  // Gate 1: Active Quotation Required for positive confirmation
+  if (!hasValidQuotation) {
+    return {
+      isConfirmed: false,
+      intent: deterministicIntent === "modification_requested" ? "modification_requested" : "ambiguous",
+      reason: "No active quotation exists for this session.",
+    };
+  }
+
+  // Gate 2: Quotation Matching Check (No unquoted requirement modifications)
+  if (
+    activeQuotationGuestCount !== undefined &&
+    currentRequirements.guestCount !== undefined &&
+    activeQuotationGuestCount !== currentRequirements.guestCount
+  ) {
+    return {
+      isConfirmed: false,
+      intent: "modification_requested",
+      reason: `Active quotation guest count (${activeQuotationGuestCount}) does not match current requirements (${currentRequirements.guestCount}). Re-quotation required.`,
+    };
+  }
+
+  // Gate 3: Extraction Status Check
+  // A result with status !== 'success' (including 'low_confidence', 'invalid_response', 'api_failure', 'service_unavailable') must NEVER confirm
+  if (extractionResult.status !== "success") {
+    return {
+      isConfirmed: false,
+      intent: "ambiguous",
+      reason: `Extraction result status is '${extractionResult.status}'. Confirmation requires successful extraction.`,
+    };
+  }
+
+  // Gate 4: Confidence Score Threshold (>= 0.85)
+  if (typeof extractionResult.confidenceScore === "number" && extractionResult.confidenceScore < 0.85) {
+    return {
+      isConfirmed: false,
+      intent: "ambiguous",
+      reason: `Extraction confidence score (${extractionResult.confidenceScore}) is below required safety threshold (0.85).`,
+    };
+  }
+
+  // Gate 5: Deterministic Utterance Classification (positive acceptance required)
+  if (deterministicIntent !== "positive_acceptance") {
+    return {
+      isConfirmed: false,
+      intent: deterministicIntent,
+      reason: `Utterance classified deterministically as '${deterministicIntent}', not 'positive_acceptance'.`,
+    };
+  }
+
+  // Gate 6: Both deterministic analysis AND schema-validated extraction must agree
+  if (
+    extractionResult.confirmationIntent !== undefined &&
+    extractionResult.confirmationIntent !== "positive_acceptance"
+  ) {
+    return {
+      isConfirmed: false,
+      intent: extractionResult.confirmationIntent,
+      reason: `Provider extraction flagged intent as '${extractionResult.confirmationIntent}', not 'positive_acceptance'.`,
+    };
+  }
+
+  return {
+    isConfirmed: true,
+    intent: "positive_acceptance",
+    reason: "Deterministic safety gate passed: unambiguous positive acceptance for active quotation.",
+  };
+}
+
+/**
  * Applies a structured extraction result to session requirements using an explicit patch model.
- * Records corrections, honors field clears, ignores low-confidence overwrites, and invalidates stale quotes.
+ * Records corrections, validates customer-clearable allowlist, ignores low-confidence overwrites,
+ * and invalidates stale quotes. Never allows model output to set customerConfirmed.
  */
 function applyRequirementsPatch(
   current: BookingRequirements,
@@ -128,25 +239,33 @@ function applyRequirementsPatch(
   let materialChangeOccurred = false;
   const data = extraction.data || {};
   const cleared = extraction.clearedFields || [];
-
-  // 1. Process explicit clears
   const recordUpdated = updated as unknown as Record<string, unknown>;
-  for (const field of cleared) {
-    if (field in recordUpdated) {
-      const prevVal = recordUpdated[field];
-      if (prevVal !== null && prevVal !== undefined && (Array.isArray(prevVal) ? prevVal.length > 0 : true)) {
-        recordUpdated[field] = Array.isArray(prevVal) ? [] : null;
-        materialChangeOccurred = true;
-        const correction: RequirementCorrectionRecord = {
-          field,
-          previousValue: prevVal,
-          newValue: Array.isArray(prevVal) ? [] : null,
-          action: "clear",
-          timestamp,
-          source: extraction.source,
-        };
-        updated.corrections?.push(correction);
-      }
+
+  // 1. Process explicit clears with strict allowlist validation
+  // Only fields in CUSTOMER_CLEARABLE_FIELDS are permitted.
+  // Model output can NEVER clear internal state, corrections, auth, or metadata!
+  const validClearedFields: CustomerClearableField[] = [];
+  for (const rawField of cleared) {
+    const parseField = CustomerClearableFieldSchema.safeParse(rawField);
+    if (parseField.success) {
+      validClearedFields.push(parseField.data);
+    }
+  }
+
+  for (const field of validClearedFields) {
+    const prevVal = recordUpdated[field];
+    if (prevVal !== null && prevVal !== undefined && (Array.isArray(prevVal) ? prevVal.length > 0 : true)) {
+      recordUpdated[field] = Array.isArray(prevVal) ? [] : null;
+      materialChangeOccurred = true;
+      const correction: RequirementCorrectionRecord = {
+        field,
+        previousValue: prevVal,
+        newValue: Array.isArray(prevVal) ? [] : null,
+        action: "clear",
+        timestamp,
+        source: extraction.source,
+      };
+      updated.corrections?.push(correction);
     }
   }
 
@@ -185,12 +304,9 @@ function applyRequirementsPatch(
     updated.beveragePreferences = data.beveragePreferences;
   }
 
-  // 5. Booleans & Metadata
+  // 5. Booleans & Metadata (Notice: customerConfirmed is deliberately EXCLUDED here)
   if (data.handoffRequested !== undefined) {
     updated.handoffRequested = data.handoffRequested;
-  }
-  if (data.customerConfirmed !== undefined) {
-    updated.customerConfirmed = data.customerConfirmed;
   }
   updated.confidenceScore = extraction.confidenceScore;
 
@@ -342,6 +458,7 @@ export async function processConversationTurn(
   }
 
   let assistantResponse = "";
+  let safetyEvaluation: ConfirmationSafetyEvaluation | undefined;
 
   // 8. State Machine Execution & Turn Response Logic
   switch (activeSession.state) {
@@ -405,19 +522,31 @@ export async function processConversationTurn(
     }
 
     case "awaiting_customer_confirmation": {
-      const intent = extractionResult.confirmationIntent;
+      // DETERMINISTIC CONFIRMATION SAFETY GATE:
+      // Applies the exact same safety criteria regardless of whether Mock or Gemini was used.
+      // Rejects low confidence, provider errors, and ambiguous statements.
+      safetyEvaluation = evaluateConfirmationSafetyGate({
+        userUtterance,
+        language: activeSession.language,
+        extractionResult,
+        hasValidQuotation: activeSession.quotation !== null,
+        activeQuotationGuestCount: activeSession.quotation?.guestCount,
+        currentRequirements: activeSession.requirements,
+      });
 
-      if (intent === "positive_acceptance") {
+      if (safetyEvaluation.isConfirmed) {
         // Unambiguous positive acceptance of currently presented quotation
         activeSession.requirements.customerConfirmed = true;
         activeSession.state = transitionVoiceBookingState(activeSession.state, "customer_confirmed");
         activeSession.state = transitionVoiceBookingState(activeSession.state, "awaiting_staff_approval");
         assistantResponse = CONFIRMATION_AWAITING_STAFF_APPROVAL[activeSession.language];
-      } else if (intent === "rejection") {
+      } else if (safetyEvaluation.intent === "rejection") {
+        activeSession.requirements.customerConfirmed = false;
         activeSession.state = transitionVoiceBookingState(activeSession.state, "customer_declined");
         assistantResponse = DECLINED_MESSAGES[activeSession.language];
-      } else if (intent === "modification_requested") {
-        // Customer requested changes: quotation already invalidated above if material
+      } else if (safetyEvaluation.intent === "modification_requested") {
+        activeSession.requirements.customerConfirmed = false;
+        // Customer requested changes: quotation already invalidated if material
         if (activeSession.requirements.missingFields.length === 0) {
           const newQuote = generateVoiceBookingQuotation(activeSession.requirements, activeSession.id);
           activeSession.quotation = newQuote;
@@ -426,7 +555,8 @@ export async function processConversationTurn(
           const nextMissing = activeSession.requirements.missingFields[0];
           assistantResponse = getPromptForNextMissingField(nextMissing, activeSession.language);
         }
-      } else if (intent === "clarification_requested") {
+      } else if (safetyEvaluation.intent === "clarification_requested") {
+        activeSession.requirements.customerConfirmed = false;
         // Customer asked a question about the quote or ingredients
         assistantResponse =
           activeSession.language === "hi"
@@ -435,8 +565,8 @@ export async function processConversationTurn(
             ? "మా అన్ని ప్యాకేజీలలో సర్టిఫైడ్ బరిస్టా, పరికరాలు మరియు హైదరాబాద్‌లో లాజిస్టిక్స్ ఉంటాయి. మీరు ఏ ప్యాకేజీని బుక్ చేయాలనుకుంటున్నారు?"
             : "All our packages include certified baristas, commercial espresso equipment, and Hyderabad logistics. Would you like to confirm one of the 3 packages, or need more details?";
       } else {
-        // Ambiguous / unrelated sentence containing 'yes' / vague filler
-        // Strictly prevent advancing to staff approval on ambiguous confirmation!
+        // Ambiguous / unrelated sentence containing 'yes' / vague filler / low confidence
+        activeSession.requirements.customerConfirmed = false;
         assistantResponse =
           activeSession.language === "hi"
             ? "आगे बढ़ने के लिए, कृपया स्पष्ट रूप से बताएं कि क्या आप Classic Brew, Artisanal Signature, या VIP Bar में से कोई पैकेज कन्फ़र्म करना चाहते हैं, या कोई बदलाव करना चाहते हैं।"
@@ -493,6 +623,7 @@ export async function processConversationTurn(
     clarificationNeeded: finalSession.requirements.missingFields,
     handoffTriggered: finalSession.state === "human_handoff",
     extractionResult,
+    safetyEvaluation,
   };
 }
 
@@ -524,47 +655,49 @@ const AUTHORIZED_STAFF_ROLES = new Set(["barista", "fleet_admin", "admin"]);
 /**
  * Administrative action: Authorizes staff approval for a pending booking.
  * 
- * IMPORTANT SECURITY ARCHITECTURE:
- * - A raw `staffApprovalId` is an audit identifier, NOT proof of authentication.
- * - Future server-side API callers (e.g. Next.js App Router route handlers) MUST authenticate
- *   the staff member via session cookies and verify their role through `src/lib/auth/adminAuth.ts`.
- * - If `authenticatedStaffRole` is provided, it is strictly validated against permitted staff roles.
+ * CRITICAL SECURITY & DOMAIN AUTHORIZATION SPECIFICATION:
+ * - This function is an internal domain-level authorization guard. It is NOT an HTTP endpoint
+ *   or a replacement for server-side authentication middleware.
+ * - Calling server-side route handlers (e.g. Next.js App Router handlers in `/api/admin/voice-bookings/...`)
+ *   MUST authenticate the caller using `verifySessionPin()` or session cookies from `src/lib/auth/adminAuth.ts`
+ *   to obtain trusted identity and role directly from the server session.
+ * - An untrusted client-supplied string or unauthenticated invocation MUST NEVER be trusted.
+ * - This function enforces strict FAIL-CLOSED authorization:
+ *     1. Rejects missing StaffAuthorizationContext.
+ *     2. Rejects missing or empty staffIdentity.
+ *     3. Rejects missing or empty staffRole.
+ *     4. Rejects roles outside 'barista', 'fleet_admin', and 'admin'.
+ *     5. Rejects missing or empty staffApprovalId.
  */
 export async function approveBookingByStaff(
   sessionId: string,
-  staffApprovalId: string,
-  repositoryOrParams?:
-    | VoiceSessionRepository
-    | {
-        staffApprovalId?: string;
-        authenticatedStaffRole?: string;
-        repository?: VoiceSessionRepository;
-      }
+  authContext: StaffAuthorizationContext,
+  repository: VoiceSessionRepository = defaultSessionRepository
 ): Promise<VoiceBookingSession> {
-  let repository: VoiceSessionRepository = defaultSessionRepository;
-  let authenticatedStaffRole: string | undefined;
-
-  if (repositoryOrParams && "getById" in repositoryOrParams) {
-    repository = repositoryOrParams as VoiceSessionRepository;
-  } else if (repositoryOrParams && typeof repositoryOrParams === "object") {
-    const params = repositoryOrParams as {
-      staffApprovalId?: string;
-      authenticatedStaffRole?: string;
-      repository?: VoiceSessionRepository;
-    };
-    if (params.repository) repository = params.repository;
-    authenticatedStaffRole = params.authenticatedStaffRole;
-  }
-
-  // RBAC validation
-  if (authenticatedStaffRole !== undefined && !AUTHORIZED_STAFF_ROLES.has(authenticatedStaffRole)) {
+  if (!authContext || typeof authContext !== "object") {
     throw new Error(
-      `Unauthorized staff approval attempt: role '${authenticatedStaffRole}' is not permitted to approve catering bookings.`
+      "Staff authorization failure: missing StaffAuthorizationContext. Unauthenticated approvals are prohibited."
     );
   }
 
-  if (!staffApprovalId || staffApprovalId.trim().length === 0) {
-    throw new Error("Cannot approve booking without a valid staffApprovalId.");
+  const { staffIdentity, staffRole, staffApprovalId } = authContext;
+
+  if (!staffIdentity || typeof staffIdentity !== "string" || staffIdentity.trim().length === 0) {
+    throw new Error("Staff authorization failure: missing or empty authenticated staffIdentity.");
+  }
+
+  if (!staffRole || typeof staffRole !== "string" || staffRole.trim().length === 0) {
+    throw new Error("Staff authorization failure: missing authenticated staffRole.");
+  }
+
+  if (!AUTHORIZED_STAFF_ROLES.has(staffRole)) {
+    throw new Error(
+      `Unauthorized staff approval attempt: role '${staffRole}' is not permitted to approve catering bookings. Permitted roles: barista, fleet_admin, admin.`
+    );
+  }
+
+  if (!staffApprovalId || typeof staffApprovalId !== "string" || staffApprovalId.trim().length === 0) {
+    throw new Error("Staff authorization failure: missing staffApprovalId audit identifier.");
   }
 
   const session = await repository.getById(sessionId);

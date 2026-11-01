@@ -1,7 +1,8 @@
 /**
- * BREW Coffee Platform — Phase 6.2.1 Voice Booking Types
+ * BREW Coffee Platform — Phase 6.2.2 Voice Booking Types
  * Strongly typed domain entities for the multilingual AI conversation engine.
- * Hardened with explicit confirmation intents, patch models, and extraction results.
+ * Hardened with fail-closed staff authorization, deterministic confirmation safety gate,
+ * and strict customer-clearable field controls.
  */
 
 import { EventQuotationRecord } from "../eventBookingConcierge/types";
@@ -29,6 +30,19 @@ export type ConfirmationIntent =
   | "clarification_requested"
   | "modification_requested"
   | "ambiguous";
+
+export const CUSTOMER_CLEARABLE_FIELDS = [
+  "guestCount",
+  "eventDate",
+  "startTime",
+  "durationHours",
+  "venueAddress",
+  "eventType",
+  "beveragePreferences",
+  "selectedTier",
+] as const;
+
+export type CustomerClearableField = (typeof CUSTOMER_CLEARABLE_FIELDS)[number];
 
 export interface RequirementCorrectionRecord {
   field: string;
@@ -99,6 +113,18 @@ export interface StructuredExtractionResult {
   rawResponse?: string;
 }
 
+export interface ConfirmationSafetyEvaluation {
+  isConfirmed: boolean;
+  intent: ConfirmationIntent;
+  reason: string;
+}
+
+export interface StaffAuthorizationContext {
+  staffIdentity: string; // Authenticated staff operator identifier from server session
+  staffRole: "barista" | "fleet_admin" | "admin" | string; // Verified role from RBAC
+  staffApprovalId: string; // Audit identifier for the approval event
+}
+
 export interface ConversationMessage {
   id: string;
   role: "user" | "assistant" | "system";
@@ -131,6 +157,7 @@ export interface ConversationTurnResult {
   clarificationNeeded: string[];
   handoffTriggered: boolean;
   extractionResult?: StructuredExtractionResult;
+  safetyEvaluation?: ConfirmationSafetyEvaluation;
 }
 
 export interface LanguageDetectionResult {

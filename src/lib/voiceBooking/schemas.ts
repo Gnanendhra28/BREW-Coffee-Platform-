@@ -1,11 +1,12 @@
 /**
- * BREW Coffee Platform — Phase 6.2.1 Voice Booking Schemas
+ * BREW Coffee Platform — Phase 6.2.2 Voice Booking Schemas
  * Runtime Zod validation for conversation state, booking requirements, extraction payloads,
- * messages, and sessions. Hardened with strict Gemini output schema and calendar date validation.
+ * messages, and sessions. Hardened with customer-clearable allowlist and staff authorization schema.
  */
 
 import { z } from "zod";
 import { PhoneNumberSchema, isValidStrictIsoUtc } from "../communication/schemas";
+import { CUSTOMER_CLEARABLE_FIELDS } from "./types";
 
 /**
  * Validates real calendar dates in YYYY-MM-DD format:
@@ -79,6 +80,14 @@ export const ConfirmationIntentSchema = z.enum([
   "ambiguous",
 ]);
 
+export const CustomerClearableFieldSchema = z.enum(CUSTOMER_CLEARABLE_FIELDS);
+
+export const StaffAuthorizationContextSchema = z.object({
+  staffIdentity: z.string().trim().min(1, "Staff identity cannot be empty"),
+  staffRole: z.enum(["barista", "fleet_admin", "admin"]),
+  staffApprovalId: z.string().trim().min(1, "Staff approval ID cannot be empty"),
+});
+
 export const RequirementCorrectionRecordSchema = z.object({
   field: z.string().min(1),
   previousValue: z.unknown(),
@@ -121,6 +130,7 @@ export const BookingRequirementsSchema = z.object({
 /**
  * Strict schema for Gemini model extraction output.
  * Rejects unexpected properties, enforces calendar correctness, bounds, and typed enums.
+ * Rejects clearing of protected internal fields.
  */
 export const GeminiExtractionOutputSchema = z
   .object({
@@ -141,7 +151,7 @@ export const GeminiExtractionOutputSchema = z
     customerConfirmed: z.boolean(),
     confirmationIntent: ConfirmationIntentSchema.nullable().default(null),
     confidenceScore: z.number().min(0).max(1).optional().default(1.0),
-    clearedFields: z.array(z.string()).optional().default([]),
+    clearedFields: z.array(CustomerClearableFieldSchema).optional().default([]),
   })
   .strict();
 

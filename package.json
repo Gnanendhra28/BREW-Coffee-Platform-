@@ -23,6 +23,7 @@
     "test:p61": "npx tsx scripts/verify-phase6-1-communication.ts",
     "test:p62": "npx tsx scripts/verify-phase6-2-voice-booking.ts",
     "test:p621": "npx tsx scripts/verify-phase6-2-1-hardening.ts",
+    "test:p622": "npx tsx scripts/verify-phase6-2-2-hardening.ts",
     "test:e2e": "playwright test",
     "deploy:gcp": "./scripts/deploy-gcp.sh"
   },

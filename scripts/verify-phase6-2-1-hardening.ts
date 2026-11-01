@@ -363,10 +363,15 @@ async function runHardeningTests() {
     pendingSession.state = "awaiting_staff_approval";
     await repo.save(pendingSession);
 
-    await approveBookingByStaff(pendingSession.id, "STAFF_001", {
-      authenticatedStaffRole: "customer", // Unauthorized role
-      repository: repo,
-    });
+    await approveBookingByStaff(
+      pendingSession.id,
+      {
+        staffIdentity: "cust_123",
+        staffRole: "customer",
+        staffApprovalId: "STAFF_001",
+      },
+      repo
+    );
   } catch (err: unknown) {
     unauthorizedRoleCaught = true;
     assert((err as Error).message.includes("Unauthorized staff approval attempt"), "Rejects approval when caller role is not staff");
@@ -378,10 +383,15 @@ async function runHardeningTests() {
   pendingSession2.state = "awaiting_staff_approval";
   await repo.save(pendingSession2);
 
-  const approved = await approveBookingByStaff(pendingSession2.id, "STAFF_BARISTA_44", {
-    authenticatedStaffRole: "barista",
-    repository: repo,
-  });
+  const approved = await approveBookingByStaff(
+    pendingSession2.id,
+    {
+      staffIdentity: "barista_007",
+      staffRole: "barista",
+      staffApprovalId: "STAFF_BARISTA_44",
+    },
+    repo
+  );
   assert(approved.state === "booking_confirmed", "Authorized barista role successfully approves booking");
   assert(approved.staffApprovalId === "STAFF_BARISTA_44", "Recorded authorized staff approval ID");
 

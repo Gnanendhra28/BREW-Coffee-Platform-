@@ -304,7 +304,15 @@ async function runTests() {
   assert(!session.staffApprovalId, "Staff approval ID is empty before staff review");
 
   // Turn 4: Staff reviews and approves booking
-  const approvedSession = await approveBookingByStaff(session.id, "STAFF_OP_7749", repo);
+  const approvedSession = await approveBookingByStaff(
+    session.id,
+    {
+      staffIdentity: "barista_op_1",
+      staffRole: "barista",
+      staffApprovalId: "STAFF_OP_7749",
+    },
+    repo
+  );
   assert(approvedSession.state === "booking_confirmed", "Staff approval transitions session to booking_confirmed");
   assert(approvedSession.staffApprovalId === "STAFF_OP_7749", "Staff approval ID recorded on session");
 
@@ -421,7 +429,15 @@ async function runTests() {
   try {
     const unreadySession = createVoiceBookingSession("+919876543214", "en");
     await repo.save(unreadySession);
-    await approveBookingByStaff(unreadySession.id, "STAFF_001", repo);
+    await approveBookingByStaff(
+      unreadySession.id,
+      {
+        staffIdentity: "barista_op_1",
+        staffRole: "barista",
+        staffApprovalId: "STAFF_001",
+      },
+      repo
+    );
   } catch (err: unknown) {
     prematureApprovalCaught = true;
     assert((err as Error).message.includes("Cannot approve booking: session is in state 'created'"), "Rejects staff approval on unready session");
