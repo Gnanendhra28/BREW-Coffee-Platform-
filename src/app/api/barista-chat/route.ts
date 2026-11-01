@@ -7,19 +7,18 @@ import {
   BaristaChatResponseSchema,
   safeValidateAgentOutput,
 } from "../../../lib/agentSchemas";
+import { readBoundedJson } from "../../../lib/boundedBody";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    // 0. Payload Size Guard
-    const contentLength = req.headers.get("content-length");
-    if (contentLength && parseInt(contentLength, 10) > 100 * 1024) {
-      return NextResponse.json(
-        { error: "Payload too large. Maximum request size is 100KB." },
-        { status: 413 }
-      );
+    // 0. Stream-bounded body read: enforces strict 100KB limit
+    const readResult = await readBoundedJson<Record<string, unknown>>(req);
+    if (!readResult.ok || readResult.response) {
+      return readResult.response!;
     }
+    const body = readResult.data || {};
 
     // 1. IP-Based Sliding Window Rate Limiting (Max 10 requests / 60 seconds per IP)
     const clientIp = getClientIp(req);
@@ -47,8 +46,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
-    const { message, history = [] } = body;
+    const { message, history = [] } = body as {
+      message?: string;
+      history?: { sender: "user" | "barista"; text: string }[];
+    };
 
     if (!message || typeof message !== "string") {
       return NextResponse.json(

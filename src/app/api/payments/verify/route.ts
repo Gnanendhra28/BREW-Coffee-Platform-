@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
+import { readBoundedJson } from "../../../../lib/boundedBody";
 import {
   getStoredPaymentOrder,
   markStoredPaymentOrderPaid,
@@ -11,21 +12,12 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    // 0. Payload Size Guard
-    const contentLength = req.headers.get("content-length");
-    if (contentLength && parseInt(contentLength, 10) > 100 * 1024) {
-      return NextResponse.json(
-        { error: "Payload too large. Maximum request size is 100KB." },
-        { status: 413 }
-      );
+    // 0. Stream-bounded body read: enforces strict 100KB limit
+    const readResult = await readBoundedJson<Record<string, unknown>>(req);
+    if (!readResult.ok || readResult.response) {
+      return readResult.response!;
     }
-
-    let body: Record<string, unknown> = {};
-    try {
-      body = (await req.json()) as Record<string, unknown>;
-    } catch {
-      return NextResponse.json({ error: "Malformed JSON payload" }, { status: 400 });
-    }
+    const body = readResult.data || {};
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body as {
       razorpay_order_id?: string;
       razorpay_payment_id?: string;

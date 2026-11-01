@@ -8,6 +8,7 @@ import {
 } from "../../../../lib/authTokens";
 import { revokeSession, isSessionRevoked } from "../../../../lib/sessionRevocation";
 import { checkRateLimit, getClientIp } from "../../../../lib/rateLimit";
+import { readBoundedJson } from "../../../../lib/boundedBody";
 
 export const dynamic = "force-dynamic";
 
@@ -40,14 +41,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    // 0. Payload Size Guard
-    const contentLength = req.headers.get("content-length");
-    if (contentLength && parseInt(contentLength, 10) > 100 * 1024) {
-      return NextResponse.json(
-        { error: "Payload too large. Maximum request size is 100KB." },
-        { status: 413 }
-      );
+    // 0. Stream-bounded body read: enforces strict 100KB limit
+    const readResult = await readBoundedJson<Record<string, unknown>>(req);
+    if (!readResult.ok || readResult.response) {
+      return readResult.response!;
     }
+    const body = readResult.data || {};
 
     // Rate limit session attempts (max 15 attempts / 60 seconds per IP, sensitive in production)
     const clientIp = getClientIp(req);
@@ -67,14 +66,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
-    const { action, pin, role, user } = body;
+    const { action, pin, role, user } = body as {
+      action?: string;
+      pin?: string;
+      role?: string;
+      user?: { uid: string; displayName?: string | null; email?: string | null; role?: string };
+    };
 
     let determinedRole: UserRole = "customer";
-    let finalUser = user || {
-      uid: `usr-${Date.now()}`,
-      displayName: "Sanctuary Guest",
-      email: null,
+    let finalUser: { uid: string; displayName: string | null; email: string | null } = {
+      uid: user?.uid || `usr-${Date.now()}`,
+      displayName: user?.displayName ?? "Sanctuary Guest",
+      email: user?.email ?? null,
     };
 
     // 0. Handle Explicit Logout Action with Durable Revocation

@@ -106,8 +106,9 @@ async function run() {
     "firestore.rules explicitly denies direct client update and delete on /orders/{orderId}"
   );
   assert(
-    rulesContent.includes("request.resource.data.paymentStatus != 'paid'"),
-    "firestore.rules forbids clients from creating orders marked paymentStatus == 'paid'"
+    rulesContent.includes("request.resource.data.paymentStatus != 'paid'") ||
+      rulesContent.includes("request.resource.data.paymentStatus in ['paid', 'captured']"),
+    "firestore.rules forbids clients from creating orders marked paymentStatus == 'paid' or 'captured'"
   );
 
   // =================================================================

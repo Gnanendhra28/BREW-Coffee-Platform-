@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
+import { readBoundedText } from "../../../../lib/boundedBody";
 import { broadcastRealtimeEvent } from "../../../../lib/serverRealtimeStore";
 import { dispatchDigitalReceipt } from "../../../../lib/receiptNotifier";
 import { maskPhone } from "../../../../lib/observability/logger";
@@ -12,16 +13,12 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    // 0. Payload Size Guard
-    const contentLength = req.headers.get("content-length");
-    if (contentLength && parseInt(contentLength, 10) > 100 * 1024) {
-      return NextResponse.json(
-        { error: "Payload too large. Maximum request size is 100KB." },
-        { status: 413 }
-      );
+    // 0. Stream-bounded body read: enforces strict 100KB limit
+    const readResult = await readBoundedText(req);
+    if (!readResult.ok || readResult.response) {
+      return readResult.response!;
     }
-
-    const rawBody = await req.text();
+    const rawBody = readResult.data || "";
     const signature = req.headers.get("x-razorpay-signature");
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || "brew_webhook_secret_dev_2026";
 

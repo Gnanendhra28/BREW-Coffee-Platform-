@@ -19,6 +19,7 @@
     "test:p51": "node scripts/verify-phase5-1-razorpay-lifecycle.mjs",
     "test:p52": "node scripts/verify-phase5-2-final-audit.mjs",
     "test:p53": "node scripts/verify-phase5-3-demo-hardening.mjs",
+    "test:p531": "node scripts/verify-phase5-3-1-security-boundaries.mjs",
     "test:e2e": "playwright test",
     "deploy:gcp": "./scripts/deploy-gcp.sh"
   },

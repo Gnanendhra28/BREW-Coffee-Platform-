@@ -3,6 +3,7 @@ import { z } from "zod";
 import { MENU_ITEMS } from "../../../../data/menuData";
 import { checkRateLimit, getClientIp } from "../../../../lib/rateLimit";
 import { maskPhone } from "../../../../lib/observability/logger";
+import { readBoundedJson } from "../../../../lib/boundedBody";
 import {
   saveStoredPaymentOrder,
   StoredPaymentOrder,
@@ -14,41 +15,42 @@ export const dynamic = "force-dynamic";
 // Map MENU_ITEMS by id for fast O(1) server lookup
 const MENU_MAP = new Map(MENU_ITEMS.map((item) => [item.id, item]));
 
-const CreateOrderInputSchema = z.object({
-  items: z
-    .array(
-      z.object({
-        id: z.string().min(1, "Product ID is required"),
-        quantity: z
-          .number()
-          .int("Quantity must be an integer")
-          .min(1, "Quantity must be at least 1")
-          .max(20, "Quantity cannot exceed 20 per item"),
-      })
-    )
-    .min(1, "Order must contain at least 1 item")
-    .max(30, "Order cannot exceed 30 items")
-    .optional(),
-  promoCode: z.string().trim().max(50).optional(),
-  isMember: z.boolean().optional(),
-  currency: z.string().default("INR"),
-  receipt: z.string().max(100).optional(),
-  customerName: z.string().max(100).optional(),
-  customerPhone: z.string().max(30).optional(),
-  vanLocationName: z.string().max(100).optional(),
-  amount: z.number().optional(), // Client-submitted total for cross-verification
-});
+const CreateOrderItemSchema = z
+  .object({
+    id: z.string().min(1, "Product ID is required"),
+    quantity: z
+      .number()
+      .int("Quantity must be an integer")
+      .min(1, "Quantity must be at least 1")
+      .max(20, "Quantity cannot exceed 20 per item"),
+  })
+  .strict();
+
+const CreateOrderInputSchema = z
+  .object({
+    items: z
+      .array(CreateOrderItemSchema)
+      .min(1, "Order must contain at least 1 item")
+      .max(30, "Order cannot exceed 30 items"),
+    promoCode: z.string().trim().max(50).optional(),
+    isMember: z.boolean().optional(),
+    currency: z.string().default("INR"),
+    receipt: z.string().max(100).optional(),
+    customerName: z.string().max(100).optional(),
+    customerPhone: z.string().max(30).optional(),
+    vanLocationName: z.string().max(100).optional(),
+    amount: z.number().optional(), // Client-submitted total for cross-verification
+  })
+  .strict();
 
 export async function POST(req: NextRequest) {
   try {
-    // 0. Payload Size Guard
-    const contentLength = req.headers.get("content-length");
-    if (contentLength && parseInt(contentLength, 10) > 100 * 1024) {
-      return NextResponse.json(
-        { error: "Payload too large. Maximum request size is 100KB." },
-        { status: 413 }
-      );
+    // 0. Stream-bounded body read: enforces strict 100KB limit before any business logic
+    const readResult = await readBoundedJson(req);
+    if (!readResult.ok || readResult.response) {
+      return readResult.response!;
     }
+    const rawBody = readResult.data;
 
     // 1. Rate Limiting (20 order creations per 60 seconds per IP, sensitive in production)
     const clientIp = getClientIp(req);
@@ -68,15 +70,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Safe JSON Parse
-    let rawBody: unknown;
-    try {
-      rawBody = await req.json();
-    } catch {
-      return NextResponse.json({ error: "Malformed JSON payload" }, { status: 400 });
-    }
-
-    // 3. Zod Input Validation
+    // 2. Strict Zod Input Validation
     const parsed = CreateOrderInputSchema.safeParse(rawBody);
     if (!parsed.success) {
       const errorMsg = parsed.error.issues

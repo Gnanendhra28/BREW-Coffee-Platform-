@@ -10,9 +10,9 @@ import { verifySessionToken } from "../../../lib/authTokens";
 import { isSessionRevoked } from "../../../lib/sessionRevocation";
 import { maskContact } from "../../../lib/observability/logger";
 import { getAdminFirestore } from "../../../lib/firebaseAdmin";
+import { readBoundedJson } from "../../../lib/boundedBody";
 
 const BUSINESS_EMAIL = process.env.BUSINESS_EMAIL || "mattag@iitbhilai.ac.in";
-const MAX_REQUEST_SIZE_BYTES = 100 * 1024; // 100 KB limit
 const IDEMPOTENCY_FILE_PATH = path.join(process.cwd(), "src/data/idempotency_records.json");
 
 // Idempotency Record Storage with 10-minute sliding window
@@ -87,14 +87,12 @@ function removeDurableIdempotency(key: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Request Size Guard
-    const contentLength = req.headers.get("content-length");
-    if (contentLength && parseInt(contentLength, 10) > MAX_REQUEST_SIZE_BYTES) {
-      return NextResponse.json(
-        { error: "Payload too large. Maximum request size is 100KB." },
-        { status: 413 }
-      );
+    // 1. Stream-bounded body read: enforces strict 100KB limit
+    const readResult = await readBoundedJson(req);
+    if (!readResult.ok || readResult.response) {
+      return readResult.response!;
     }
+    const rawBody = readResult.data;
 
     // 2. IP Rate Limiting (10 requests per 60 seconds per IP, sensitive in production)
     const clientIp = getClientIp(req);
@@ -119,17 +117,6 @@ export async function POST(req: NextRequest) {
             "Retry-After": Math.max(1, rateLimit.reset - Math.floor(Date.now() / 1000)).toString(),
           },
         }
-      );
-    }
-
-    // 3. Safe JSON Body Parsing
-    let rawBody: unknown;
-    try {
-      rawBody = await req.json();
-    } catch {
-      return NextResponse.json(
-        { error: "Malformed JSON request payload." },
-        { status: 400 }
       );
     }
 

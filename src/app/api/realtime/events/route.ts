@@ -8,6 +8,7 @@ import { verifySessionToken } from "../../../../lib/authTokens";
 import { isSessionRevoked } from "../../../../lib/sessionRevocation";
 import { checkRateLimit, getClientIp } from "../../../../lib/rateLimit";
 import { maskPhone } from "../../../../lib/observability/logger";
+import { readBoundedJson } from "../../../../lib/boundedBody";
 
 export const dynamic = "force-dynamic";
 
@@ -33,22 +34,24 @@ const STAFF_ONLY_EVENT_TYPES: Set<AllowedEventType> = new Set([
 ]);
 
 // Zod Schemas for Event Payloads
-const OrderCreatedPayloadSchema = z.object({
-  id: z.string().min(1, "Order ID is required"),
-  orderNumber: z.string().min(1, "Order Number is required"),
-  customerName: z.string().min(1, "Customer Name is required"),
-  customerPhone: z.string().optional(),
-  items: z.array(z.any()).min(1, "At least 1 item is required"),
-  totalAmount: z.number().nonnegative("Total amount must be non-negative"),
-  status: z.enum(["pending", "received", "brewing", "ready", "completed", "cancelled"]).default("pending"),
-  pickupType: z.enum(["walkup", "curbside"]).default("walkup"),
-  vanLocationName: z.string().optional(),
-  notes: z.string().max(500).optional(),
-  vehicleInfo: z.string().max(200).optional(),
-  createdAt: z.number().optional(),
-  paymentStatus: z.string().optional(),
-  paymentMethod: z.string().optional(),
-});
+const OrderCreatedPayloadSchema = z
+  .object({
+    id: z.string().min(1, "Order ID is required"),
+    orderNumber: z.string().min(1, "Order Number is required"),
+    customerName: z.string().min(1, "Customer Name is required"),
+    customerPhone: z.string().optional(),
+    items: z.array(z.any()).min(1, "At least 1 item is required"),
+    totalAmount: z.number().nonnegative("Total amount must be non-negative"),
+    status: z.enum(["pending", "received"]).default("pending"),
+    pickupType: z.enum(["walkup", "curbside"]).default("walkup"),
+    vanLocationName: z.string().optional(),
+    notes: z.string().max(500).optional(),
+    vehicleInfo: z.string().max(200).optional(),
+    createdAt: z.number().optional(),
+    paymentStatus: z.enum(["pending", "unpaid"]).default("pending"),
+    paymentMethod: z.string().optional(),
+  })
+  .strict();
 
 const OrderStatusChangedPayloadSchema = z.object({
   orderId: z.string().min(1, "orderId is required"),
@@ -108,14 +111,12 @@ const FlashDealChangedPayloadSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    // 0. Payload Size Guard
-    const contentLength = req.headers.get("content-length");
-    if (contentLength && parseInt(contentLength, 10) > 100 * 1024) {
-      return NextResponse.json(
-        { error: "Payload too large. Maximum request size is 100KB." },
-        { status: 413 }
-      );
+    // 0. Stream-bounded body read: enforces strict 100KB limit before business logic
+    const readResult = await readBoundedJson(req);
+    if (!readResult.ok || readResult.response) {
+      return readResult.response!;
     }
+    const body = readResult.data;
 
     // 1. IP Rate Limiting (30 events per 60 seconds per IP, sensitive in production)
     const clientIp = getClientIp(req);
@@ -133,14 +134,6 @@ export async function POST(req: NextRequest) {
         { error: "Too many real-time events submitted. Rate limit exceeded." },
         { status: 429 }
       );
-    }
-
-    // 2. Safe JSON Body Parse
-    let body: unknown;
-    try {
-      body = await req.json();
-    } catch {
-      return NextResponse.json({ error: "Malformed JSON payload" }, { status: 400 });
     }
 
     if (!body || typeof body !== "object") {

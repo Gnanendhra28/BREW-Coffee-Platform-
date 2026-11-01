@@ -98,7 +98,9 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.resource.data.orderNumber is string &&
         request.resource.data.totalAmount is number &&
-        (!('paymentStatus' in request.resource.data) || request.resource.data.paymentStatus != 'paid') &&
+        (!('paymentStatus' in request.resource.data) || !(request.resource.data.paymentStatus in ['paid', 'captured'])) &&
+        (!('isVerified' in request.resource.data && request.resource.data.isVerified == true)) &&
+        (!('isFulfilled' in request.resource.data && request.resource.data.isFulfilled == true)) &&
         (!('status' in request.resource.data) || request.resource.data.status in ['pending', 'received']);
       allow update, delete: if false; // All status updates and mutations MUST route through the authenticated server hub (/api/realtime/events)
     }
