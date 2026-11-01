@@ -1,6 +1,6 @@
 /**
- * BREW Coffee Platform — Phase 6.1 Consent Repository
- * Provides in-memory implementation for deterministic testing and clean repository abstraction.
+ * BREW Coffee Platform — Phase 6.1.1 Consent Repository
+ * Provides in-memory implementation for deterministic testing and clean event history persistence.
  */
 
 import {
@@ -9,17 +9,21 @@ import {
   ConsentRecord,
   ConsentRepository,
 } from "../types";
-import { normalizePhoneNumber, revokeConsentRecord } from "../consent";
-import { ConsentMissingError } from "../errors";
+import {
+  assertValidPhoneNumber,
+  createRevocationRecord,
+  hasActiveConsent,
+  normalizePhoneNumber,
+} from "../consent";
 
 export class InMemoryConsentRepository implements ConsentRepository {
-  private recordsByPhone: Map<string, ConsentRecord[]> = new Map();
+  private eventsByPhone: Map<string, ConsentRecord[]> = new Map();
 
   async save(record: ConsentRecord): Promise<void> {
-    const phone = record.phoneNumber;
-    const existing = this.recordsByPhone.get(phone) || [];
+    const phone = assertValidPhoneNumber(record.phoneNumber);
+    const existing = this.eventsByPhone.get(phone) || [];
 
-    // Check if updating an existing record by id
+    // If an event with the exact same ID exists, update it; otherwise append as a new historical event
     const index = existing.findIndex((r) => r.id === record.id);
     if (index >= 0) {
       existing[index] = record;
@@ -27,13 +31,13 @@ export class InMemoryConsentRepository implements ConsentRepository {
       existing.push(record);
     }
 
-    this.recordsByPhone.set(phone, existing);
+    this.eventsByPhone.set(phone, existing);
   }
 
   async findByPhone(phoneNumber: string): Promise<ConsentRecord[]> {
     const normalized = normalizePhoneNumber(phoneNumber);
     if (!normalized) return [];
-    const list = this.recordsByPhone.get(normalized) || [];
+    const list = this.eventsByPhone.get(normalized) || [];
     return [...list];
   }
 
@@ -43,44 +47,44 @@ export class InMemoryConsentRepository implements ConsentRepository {
     purpose: CommunicationPurpose
   ): Promise<ConsentRecord | null> {
     const records = await this.findByPhone(phoneNumber);
-    const matching = records.filter(
-      (r) => r.channel === channel && r.purpose === purpose
+    const isActive = hasActiveConsent(records, channel, purpose);
+    if (!isActive) return null;
+
+    // Filter matching grants and sort by timestamp descending to return latest active grant
+    const grants = records.filter(
+      (r) => r.channel === channel && r.purpose === purpose && r.eventType === "grant" && r.granted
     );
 
-    if (matching.length === 0) return null;
+    if (grants.length === 0) return null;
 
-    // Sort descending by timestamp
-    const sorted = [...matching].sort((a, b) => {
-      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-    });
+    const sorted = [...grants].sort(
+      (a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)
+    );
 
-    const latest = sorted[0];
-    if (latest.revokedAt || !latest.granted) {
-      return null;
-    }
-
-    return latest;
+    return sorted[0];
   }
 
   async revoke(
     phoneNumber: string,
     channel: CommunicationChannel,
     purpose: CommunicationPurpose,
-    reason = "customer_requested_opt_out"
+    reason = "customer_requested_opt_out",
+    timestamp?: string
   ): Promise<ConsentRecord> {
-    const active = await this.getActiveConsent(phoneNumber, channel, purpose);
-    if (!active) {
-      throw new ConsentMissingError(
-        `Cannot revoke consent: no active consent found for ${channel} ${purpose}`
-      );
-    }
+    const normalized = assertValidPhoneNumber(phoneNumber);
+    const revocationEvent = createRevocationRecord({
+      phoneNumber: normalized,
+      channel,
+      purpose,
+      reason,
+      timestamp,
+    });
 
-    const revoked = revokeConsentRecord(active, reason);
-    await this.save(revoked);
-    return revoked;
+    await this.save(revocationEvent);
+    return revocationEvent;
   }
 
   clear(): void {
-    this.recordsByPhone.clear();
+    this.eventsByPhone.clear();
   }
 }

@@ -1,6 +1,6 @@
 /**
- * BREW Coffee Platform — Phase 6.1 Communication Schemas
- * Runtime validation for phone numbers, consent, DND, and provider payloads.
+ * BREW Coffee Platform — Phase 6.1.1 Communication Schemas
+ * Runtime validation for phone numbers, consent events, DND multi-scope records, and provider payloads.
  */
 
 import { z } from "zod";
@@ -25,18 +25,31 @@ export const CommunicationPurposeSchema = z.enum([
   "marketing",
 ]);
 
+export const ConsentEventTypeSchema = z.enum(["grant", "revoke"]);
+
+/**
+ * Validates ISO 8601 UTC date-time string, explicitly rejecting invalid or unparseable timestamps.
+ */
+export const IsoUtcDateTimeSchema = z.string().refine((val) => {
+  if (!val || typeof val !== "string") return false;
+  const time = Date.parse(val);
+  return !isNaN(time);
+}, "Timestamp must be a valid parseable ISO 8601 date string");
+
 export const ConsentRecordSchema = z.object({
   id: z.string().min(8, "Consent ID must be at least 8 characters"),
   phoneNumber: PhoneNumberSchema,
   channel: CommunicationChannelSchema,
   purpose: CommunicationPurposeSchema,
+  eventType: ConsentEventTypeSchema,
   granted: z.boolean(),
-  consentText: z.string().min(10, "Consent text must be at least 10 characters"),
+  consentText: z.string().min(1, "Consent text is required"),
   consentVersion: z.string().min(1, "Consent version is required"),
-  timestamp: z.string().datetime({ message: "Timestamp must be ISO 8601 UTC" }),
+  timestamp: IsoUtcDateTimeSchema,
   enquiryId: z.string().optional(),
-  revokedAt: z.string().datetime({ message: "RevokedAt must be ISO 8601 UTC" }).optional(),
-  revocationReason: z.string().min(3).optional(),
+  reason: z.string().optional(),
+  revokedAt: IsoUtcDateTimeSchema.optional(),
+  revocationReason: z.string().optional(),
 });
 
 export const DndScopeSchema = z.enum(["all", "voice", "whatsapp"]);
@@ -48,8 +61,19 @@ export const DndRecordSchema = z.object({
   phoneNumber: PhoneNumberSchema,
   scope: DndScopeSchema,
   reason: z.string().min(3),
-  createdAt: z.string().datetime({ message: "CreatedAt must be ISO 8601 UTC" }),
+  createdAt: IsoUtcDateTimeSchema,
   sourceChannel: DndSourceSchema.optional(),
+});
+
+export const DndAuditEventSchema = z.object({
+  id: z.string().min(6),
+  action: z.enum(["REGISTER_DND", "REMOVE_DND"]),
+  phoneNumberMasked: z.string().min(6),
+  scope: DndScopeSchema,
+  reason: z.string().min(1),
+  justification: z.string().optional(),
+  performedBy: z.string().optional(),
+  timestamp: IsoUtcDateTimeSchema,
 });
 
 export const PolicyEvaluationRequestSchema = z.object({

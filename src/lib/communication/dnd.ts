@@ -19,7 +19,7 @@ export function createDndRecord(params: {
 }): DndRecord {
   const normalizedPhone = assertValidPhoneNumber(params.phoneNumber);
   const nowUtc = params.createdAt || new Date().toISOString();
-  const id = `dnd_${normalizedPhone.replace(/\+/g, "")}`;
+  const id = `dnd_${normalizedPhone.replace(/\+/g, "")}_${params.scope}`;
 
   const record: DndRecord = {
     id,
@@ -31,6 +31,31 @@ export function createDndRecord(params: {
   };
 
   return DndRecordSchema.parse(record);
+}
+
+/**
+ * Pure evaluation function checking whether a communication channel is blocked by multiple active DND scopes.
+ * 
+ * Rules:
+ * - scope 'all' blocks ALL channels (voice and whatsapp).
+ * - scope 'voice' blocks ONLY voice calls.
+ * - scope 'whatsapp' blocks ONLY whatsapp messages.
+ */
+export function isChannelBlockedByDndScopes(
+  activeScopes: DndRecord[],
+  channel: CommunicationChannel
+): boolean {
+  if (!activeScopes || activeScopes.length === 0) return false;
+
+  if (activeScopes.some((r) => r.scope === "all")) {
+    return true;
+  }
+
+  if (activeScopes.some((r) => r.scope === channel)) {
+    return true;
+  }
+
+  return false;
 }
 
 /**

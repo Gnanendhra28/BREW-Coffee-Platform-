@@ -1,9 +1,12 @@
 /**
- * BREW Coffee Platform — Phase 6.1 WhatsApp Provider Interface & Deterministic Mock
+ * BREW Coffee Platform — Phase 6.1.1 WhatsApp Provider Interface & Deterministic Mock
  * 
  * SIMULATION ONLY:
  * MockWhatsAppProvider enables deterministic unit/integration testing of WhatsApp transactional
  * message flows without calling the Meta Cloud API or dispatching messages to real phone numbers.
+ * 
+ * Simulated statuses (e.g. 'simulated_accepted', 'simulated_delivered') are explicitly labeled
+ * to prevent false claims of real Meta Cloud API dispatch or delivery.
  */
 
 import {
@@ -17,9 +20,14 @@ import { WhatsAppTemplateParamsSchema } from "../schemas";
 
 export class MockWhatsAppProvider implements WhatsAppProvider {
   public readonly providerName = "mock-whatsapp-provider";
+  public readonly isSimulated = true;
+  public readonly providerMode = "mock" as const;
+
   private simulateFailure = false;
   private failureErrorMessage = "Simulated WhatsApp Meta Graph API error (500)";
-  private defaultMessageStatus: WhatsAppMessageStatus = "delivered";
+  private defaultMessageStatus: WhatsAppMessageStatus = "simulated_delivered";
+  private injectedMessageId: string | null = null;
+  private injectedTimestamp: string | null = null;
   private dispatchedMessages: Map<
     string,
     { params: WhatsAppTemplateParams; dispatchedAt: string; status: WhatsAppMessageStatus }
@@ -40,27 +48,48 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
     this.defaultMessageStatus = status;
   }
 
+  /**
+   * Allows tests to inject a predictable message ID for assertion.
+   */
+  setNextMessageId(id: string): void {
+    this.injectedMessageId = id;
+  }
+
+  /**
+   * Allows tests to inject a predictable timestamp for deterministic verification.
+   */
+  setNextTimestamp(isoTimestamp: string): void {
+    this.injectedTimestamp = isoTimestamp;
+  }
+
   async sendTemplate(params: WhatsAppTemplateParams): Promise<WhatsAppSendResult> {
-    // Validate template payload against Zod schema
     const validated = WhatsAppTemplateParamsSchema.parse(params);
 
     if (this.simulateFailure) {
       throw new Error(this.failureErrorMessage);
     }
 
-    const dispatchedAt = new Date().toISOString();
-    const messageId = `mock_wa_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const dispatchedAt = this.injectedTimestamp || new Date().toISOString();
+    const messageId =
+      this.injectedMessageId ||
+      `mock_wa_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+    // Reset single-use injected overrides
+    this.injectedMessageId = null;
+    this.injectedTimestamp = null;
 
     this.dispatchedMessages.set(messageId, {
       params: validated,
       dispatchedAt,
-      status: "accepted",
+      status: "simulated_accepted",
     });
 
     return {
       messageId,
-      status: "accepted",
+      status: "simulated_accepted",
       dispatchedAt,
+      isSimulated: true,
+      providerMode: "mock",
     };
   }
 
@@ -70,37 +99,32 @@ export class MockWhatsAppProvider implements WhatsAppProvider {
     }
 
     const record = this.dispatchedMessages.get(messageId);
-    const status = record ? this.defaultMessageStatus : "failed";
+    const status = record ? this.defaultMessageStatus : "simulated_failed";
 
     return {
       messageId,
       status,
       timestamp: new Date().toISOString(),
+      isSimulated: true,
+      providerMode: "mock",
     };
   }
 
-  /**
-   * Test inspection helper: returns count of dispatched mock messages.
-   */
   getDispatchedMessageCount(): number {
     return this.dispatchedMessages.size;
   }
 
-  /**
-   * Test inspection helper: retrieves template name of last dispatched message without exposing PII.
-   */
   getLastDispatchedTemplateName(): string | null {
     const entries = Array.from(this.dispatchedMessages.values());
     if (entries.length === 0) return null;
     return entries[entries.length - 1].params.templateName;
   }
 
-  /**
-   * Clears in-memory mock state.
-   */
   reset(): void {
     this.simulateFailure = false;
-    this.defaultMessageStatus = "delivered";
+    this.defaultMessageStatus = "simulated_delivered";
+    this.injectedMessageId = null;
+    this.injectedTimestamp = null;
     this.dispatchedMessages.clear();
   }
 }

@@ -1,6 +1,7 @@
 /**
- * BREW Coffee Platform — Phase 6.1 Verification Suite
- * Automated tests for Communication Foundation, Consent Engine, DND, Policy & Mock Providers.
+ * BREW Coffee Platform — Phase 6.1 & 6.1.1 Hardened Verification Suite
+ * Automated tests for Communication Foundation, Consent Event History,
+ * DND Multi-Scope Suppression, Server-Side Policy Orchestration & Simulation Mocks.
  */
 
 import assert from "node:assert/strict";
@@ -8,13 +9,16 @@ import http from "node:http";
 import https from "node:https";
 import {
   assertValidPhoneNumber,
+  assertValidTimestamp,
   createConsentRecord,
   createDndRecord,
+  createRevocationRecord,
   evaluateCommunicationPolicy,
   hasActiveConsent,
   InMemoryConsentRepository,
   InMemoryDndRepository,
   isChannelBlockedByDnd,
+  isChannelBlockedByDndScopes,
   isConsentRevoked,
   isOptOutPhrase,
   isVoiceBookingEnabled,
@@ -23,11 +27,12 @@ import {
   MockVoiceProvider,
   MockWhatsAppProvider,
   normalizePhoneNumber,
+  orchestrateCommunicationPolicy,
   revokeConsentRecord,
 } from "../src/lib/communication/index";
 
 console.log("===============================================================");
-console.log("📡 VERIFICATION SUITE: Phase 6.1 Communication Foundation");
+console.log("📡 VERIFICATION SUITE: Phase 6.1.1 Communication Foundation Hardening");
 console.log("===============================================================\n");
 
 let passedCount = 0;
@@ -47,9 +52,9 @@ async function runTest(description: string, fn: () => void | Promise<void>) {
 
 async function runSuite() {
   /* ======================================================================== */
-  /* 1. Phone Number Normalization & Consent Engine                           */
+  /* 1. Phone Number Normalization & Consent Event History                    */
   /* ======================================================================== */
-  console.log("1. Consent Engine & Phone Number Normalization");
+  console.log("1. Consent Engine & Event History Semantics");
 
   await runTest("Normalizes standard 10-digit Indian numbers to E.164", () => {
     assert.equal(normalizePhoneNumber("9876543210"), "+919876543210");
@@ -57,6 +62,7 @@ async function runSuite() {
     assert.equal(normalizePhoneNumber("919876543210"), "+919876543210");
     assert.equal(normalizePhoneNumber("+91 98765 43210"), "+919876543210");
     assert.equal(normalizePhoneNumber("+91-98765-43210"), "+919876543210");
+    assert.equal(maskPhoneNumber("+919876543210"), "+91******3210");
   });
 
   await runTest("Rejects malformed or invalid phone numbers", () => {
@@ -70,7 +76,12 @@ async function runSuite() {
     );
   });
 
-  await runTest("Creates validated, auditable ConsentRecord with E.164 phone", () => {
+  await runTest("Rejects invalid or unparseable timestamps", () => {
+    assert.throws(() => assertValidTimestamp("not-a-date"), /cannot be parsed/);
+    assert.throws(() => assertValidTimestamp(""), /Invalid timestamp format/);
+  });
+
+  await runTest("Creates validated, auditable ConsentRecord with E.164 phone and eventType='grant'", () => {
     const record = createConsentRecord({
       phoneNumber: "9876543210",
       channel: "voice",
@@ -83,10 +94,10 @@ async function runSuite() {
     assert.equal(record.phoneNumber, "+919876543210");
     assert.equal(record.channel, "voice");
     assert.equal(record.purpose, "voice_booking");
+    assert.equal(record.eventType, "grant");
     assert.equal(record.granted, true);
-    assert.ok(record.id.startsWith("consent_"));
+    assert.ok(record.id.startsWith("consent_grant_"));
     assert.ok(record.timestamp);
-    assert.equal(record.revokedAt, undefined);
   });
 
   await runTest("Missing consent returns false", () => {
@@ -119,8 +130,8 @@ async function runSuite() {
     assert.equal(hasActiveConsent(records, "whatsapp", "marketing"), false);
   });
 
-  await runTest("Revocation overrides earlier grant and cannot be undone by older records", () => {
-    const initialGrant = createConsentRecord({
+  await runTest("Event Semantics: Grant (T1) -> Revoke (T2) results in inactive consent", () => {
+    const grant = createConsentRecord({
       phoneNumber: "9876543210",
       channel: "voice",
       purpose: "voice_booking",
@@ -128,23 +139,116 @@ async function runSuite() {
       timestamp: "2026-11-01T08:00:00.000Z",
     });
 
-    assert.equal(hasActiveConsent([initialGrant], "voice", "voice_booking"), true);
+    const revoke = createRevocationRecord({
+      phoneNumber: "9876543210",
+      channel: "voice",
+      purpose: "voice_booking",
+      reason: "Customer requested stop",
+      timestamp: "2026-11-01T09:00:00.000Z",
+    });
 
-    const revokedGrant = revokeConsentRecord(
-      initialGrant,
-      "Customer requested stop",
-      "2026-11-01T09:00:00.000Z"
-    );
+    assert.equal(isConsentRevoked(revoke), true);
+    assert.equal(hasActiveConsent([grant, revoke], "voice", "voice_booking"), false);
+  });
 
-    assert.equal(isConsentRevoked(revokedGrant), true);
-    assert.equal(hasActiveConsent([revokedGrant], "voice", "voice_booking"), false);
+  await runTest("Event Semantics: Grant (T1) -> Revoke (T2) -> Explicit New Grant (T3) restores consent", () => {
+    const grant1 = createConsentRecord({
+      phoneNumber: "9876543210",
+      channel: "voice",
+      purpose: "voice_booking",
+      consentText: "Initial voice consent.",
+      timestamp: "2026-11-01T08:00:00.000Z",
+    });
 
-    // List with both initial and revoked (revoked newer)
-    const history = [initialGrant, revokedGrant];
+    const revoke1 = createRevocationRecord({
+      phoneNumber: "9876543210",
+      channel: "voice",
+      purpose: "voice_booking",
+      reason: "User opted out",
+      timestamp: "2026-11-01T09:00:00.000Z",
+    });
+
+    const grant2 = createConsentRecord({
+      phoneNumber: "9876543210",
+      channel: "voice",
+      purpose: "voice_booking",
+      consentText: "Explicit new booking re-opt-in.",
+      timestamp: "2026-11-01T10:00:00.000Z",
+    });
+
+    const history = [grant1, revoke1, grant2];
+    assert.equal(hasActiveConsent(history, "voice", "voice_booking"), true);
+  });
+
+  await runTest("Event Semantics: Older grant (T1) submitted after newer revocation (T2) remains inactive", () => {
+    const grantOld = createConsentRecord({
+      phoneNumber: "9876543210",
+      channel: "voice",
+      purpose: "voice_booking",
+      consentText: "Stale offline grant",
+      timestamp: "2026-11-01T07:00:00.000Z",
+    });
+
+    const revokeNew = createRevocationRecord({
+      phoneNumber: "9876543210",
+      channel: "voice",
+      purpose: "voice_booking",
+      reason: "User opted out via web",
+      timestamp: "2026-11-01T08:30:00.000Z",
+    });
+
+    // History contains both; newer revocation must prevail
+    const history = [grantOld, revokeNew];
     assert.equal(hasActiveConsent(history, "voice", "voice_booking"), false);
   });
 
-  await runTest("InMemoryConsentRepository handles saving, querying, and revoking", async () => {
+  await runTest("Event Semantics: Voice revocation does not affect active WhatsApp consent", () => {
+    const voiceRevoke = createRevocationRecord({
+      phoneNumber: "9876543210",
+      channel: "voice",
+      purpose: "voice_booking",
+      reason: "Stop calls",
+      timestamp: "2026-11-01T09:00:00.000Z",
+    });
+
+    const waGrant = createConsentRecord({
+      phoneNumber: "9876543210",
+      channel: "whatsapp",
+      purpose: "transactional_update",
+      consentText: "WhatsApp updates",
+      timestamp: "2026-11-01T08:00:00.000Z",
+    });
+
+    const history = [voiceRevoke, waGrant];
+    assert.equal(hasActiveConsent(history, "voice", "voice_booking"), false);
+    assert.equal(hasActiveConsent(history, "whatsapp", "transactional_update"), true);
+  });
+
+  await runTest("Event Semantics: Equal timestamps resolved deterministically (Safety-First: Revoke beats Grant)", () => {
+    const sameTimestamp = "2026-11-01T12:00:00.000Z";
+
+    const grant = createConsentRecord({
+      phoneNumber: "9876543210",
+      channel: "voice",
+      purpose: "voice_booking",
+      consentText: "Simultaneous grant",
+      timestamp: sameTimestamp,
+    });
+
+    const revoke = createRevocationRecord({
+      phoneNumber: "9876543210",
+      channel: "voice",
+      purpose: "voice_booking",
+      reason: "Simultaneous revoke",
+      timestamp: sameTimestamp,
+    });
+
+    // Order in array shouldn't matter; tie-breaker must choose revoke
+    assert.equal(hasActiveConsent([grant, revoke], "voice", "voice_booking"), false);
+    assert.equal(hasActiveConsent([revoke, grant], "voice", "voice_booking"), false);
+  });
+
+  await runTest("InMemoryConsentRepository handles saving events, querying active grant, and revoking", async () => {
     const repo = new InMemoryConsentRepository();
     const phone = "9876543210";
 
@@ -166,9 +270,9 @@ async function runSuite() {
   });
 
   /* ======================================================================== */
-  /* 2. Do-Not-Contact (DND) Engine & Multilingual Opt-Out Phrases           */
+  /* 2. Do-Not-Contact (DND) Multi-Scope Engine & Audit History               */
   /* ======================================================================== */
-  console.log("\n2. Do-Not-Contact (DND) Engine & Multilingual Opt-Out Matching");
+  console.log("\n2. Do-Not-Contact (DND) Multi-Scope Engine & Audit Logging");
 
   await runTest("Global DND ('all') blocks all outbound channels", () => {
     const dnd = createDndRecord({
@@ -179,75 +283,155 @@ async function runSuite() {
 
     assert.equal(isChannelBlockedByDnd(dnd, "voice"), true);
     assert.equal(isChannelBlockedByDnd(dnd, "whatsapp"), true);
+    assert.equal(isChannelBlockedByDndScopes([dnd], "voice"), true);
+    assert.equal(isChannelBlockedByDndScopes([dnd], "whatsapp"), true);
   });
 
-  await runTest("Voice-only DND blocks voice but allows WhatsApp", () => {
-    const dnd = createDndRecord({
-      phoneNumber: "9876543210",
+  await runTest("Multi-Scope: 'voice' and 'whatsapp' can coexist independently", async () => {
+    const repo = new InMemoryDndRepository();
+    const phone = "9876543210";
+
+    const voiceDnd = createDndRecord({
+      phoneNumber: phone,
       scope: "voice",
-      reason: "User does not want phone calls",
+      reason: "No phone calls",
     });
-
-    assert.equal(isChannelBlockedByDnd(dnd, "voice"), true);
-    assert.equal(isChannelBlockedByDnd(dnd, "whatsapp"), false);
-  });
-
-  await runTest("WhatsApp-only DND blocks WhatsApp but allows voice", () => {
-    const dnd = createDndRecord({
-      phoneNumber: "9876543210",
+    const waDnd = createDndRecord({
+      phoneNumber: phone,
       scope: "whatsapp",
-      reason: "User opted out of WhatsApp messages",
+      reason: "No whatsapp messages",
     });
 
-    assert.equal(isChannelBlockedByDnd(dnd, "whatsapp"), true);
-    assert.equal(isChannelBlockedByDnd(dnd, "voice"), false);
+    await repo.save(voiceDnd);
+    await repo.save(waDnd);
+
+    const activeScopes = await repo.findActiveScopes(phone);
+    assert.equal(activeScopes.length, 2);
+    assert.ok(activeScopes.some((s) => s.scope === "voice"));
+    assert.ok(activeScopes.some((s) => s.scope === "whatsapp"));
+
+    assert.equal(isChannelBlockedByDndScopes(activeScopes, "voice"), true);
+    assert.equal(isChannelBlockedByDndScopes(activeScopes, "whatsapp"), true);
   });
 
-  await runTest("Repeated opt-out events are idempotent and preserve 'all' scope", async () => {
+  await runTest("Multi-Scope: Removing 'voice' scope leaves 'whatsapp' active", async () => {
     const repo = new InMemoryDndRepository();
     const phone = "9876543210";
 
-    const globalDnd = createDndRecord({
-      phoneNumber: phone,
-      scope: "all",
-      reason: "STOP",
-    });
-    await repo.save(globalDnd);
+    await repo.save(createDndRecord({ phoneNumber: phone, scope: "voice", reason: "Stop calls" }));
+    await repo.save(createDndRecord({ phoneNumber: phone, scope: "whatsapp", reason: "Stop WA" }));
 
-    // Attempt to register narrower scope; idempotency preserves 'all'
-    const voiceOnlyDnd = createDndRecord({
-      phoneNumber: phone,
-      scope: "voice",
-      reason: "Repeated call",
-    });
-    await repo.save(voiceOnlyDnd);
+    // Remove only voice scope
+    const removed = await repo.removeScope(phone, "voice", "Customer requested phone follow-up");
+    assert.equal(removed, true);
 
-    const saved = await repo.findByPhone(phone);
-    assert.equal(saved?.scope, "all");
+    const remainingScopes = await repo.findActiveScopes(phone);
+    assert.equal(remainingScopes.length, 1);
+    assert.equal(remainingScopes[0].scope, "whatsapp");
+
+    assert.equal(isChannelBlockedByDndScopes(remainingScopes, "voice"), false);
+    assert.equal(isChannelBlockedByDndScopes(remainingScopes, "whatsapp"), true);
   });
 
-  await runTest("DND removal strictly requires explicit auditable justification", async () => {
+  await runTest("Multi-Scope: Global 'all' coexists with 'voice' and cannot be downgraded", async () => {
     const repo = new InMemoryDndRepository();
     const phone = "9876543210";
 
-    await repo.save(createDndRecord({ phoneNumber: phone, scope: "all", reason: "STOP" }));
+    await repo.save(createDndRecord({ phoneNumber: phone, scope: "all", reason: "Global STOP" }));
+    await repo.save(createDndRecord({ phoneNumber: phone, scope: "voice", reason: "No calls" }));
+
+    const activeScopes = await repo.findActiveScopes(phone);
+    assert.equal(activeScopes.length, 2);
+
+    // Global DND still blocks both channels
+    assert.equal(isChannelBlockedByDndScopes(activeScopes, "voice"), true);
+    assert.equal(isChannelBlockedByDndScopes(activeScopes, "whatsapp"), true);
+
+    // Primary scope returns 'all'
+    const primary = await repo.findByPhone(phone);
+    assert.equal(primary?.scope, "all");
+  });
+
+  await runTest("Multi-Scope: Removing 'all' leaves independently active 'voice' scope intact", async () => {
+    const repo = new InMemoryDndRepository();
+    const phone = "9876543210";
+
+    await repo.save(createDndRecord({ phoneNumber: phone, scope: "all", reason: "Global STOP" }));
+    await repo.save(createDndRecord({ phoneNumber: phone, scope: "voice", reason: "No calls" }));
+
+    // Explicit administrative removal of 'all' scope
+    const removed = await repo.removeScope(
+      phone,
+      "all",
+      "Administrative override: customer re-opted in via verified support ticket",
+      "admin_101"
+    );
+    assert.equal(removed, true);
+
+    const remaining = await repo.findActiveScopes(phone);
+    assert.equal(remaining.length, 1);
+    assert.equal(remaining[0].scope, "voice");
+
+    // Voice remains blocked, WhatsApp is now unblocked
+    assert.equal(isChannelBlockedByDndScopes(remaining, "voice"), true);
+    assert.equal(isChannelBlockedByDndScopes(remaining, "whatsapp"), false);
+  });
+
+  await runTest("Repeated registrations are idempotent and do not corrupt storage", async () => {
+    const repo = new InMemoryDndRepository();
+    const phone = "9876543210";
+
+    await repo.save(createDndRecord({ phoneNumber: phone, scope: "voice", reason: "Stop" }));
+    await repo.save(createDndRecord({ phoneNumber: phone, scope: "voice", reason: "Stop duplicate" }));
+
+    const scopes = await repo.findActiveScopes(phone);
+    assert.equal(scopes.length, 1);
+    assert.equal(scopes[0].scope, "voice");
+  });
+
+  await runTest("DND removal strictly rejects invalid or insufficiently detailed justifications", async () => {
+    const repo = new InMemoryDndRepository();
+    const phone = "9876543210";
+
+    await repo.save(createDndRecord({ phoneNumber: phone, scope: "voice", reason: "Stop" }));
 
     // Empty justification rejected
     await assert.rejects(
-      () => repo.remove(phone, ""),
-      /DND removal requires an explicit, auditable justification/
+      () => repo.removeScope(phone, "voice", ""),
+      /minimum 5 characters/
     );
 
-    // Valid auditable justification succeeds
-    const removed = await repo.remove(phone, "Customer contacted support via email to re-opt-in");
-    assert.equal(removed, true);
-    const lookup = await repo.findByPhone(phone);
-    assert.equal(lookup, null);
+    // Less than 10 characters for 'all' scope rejected
+    await repo.save(createDndRecord({ phoneNumber: phone, scope: "all", reason: "Stop" }));
+    await assert.rejects(
+      () => repo.removeScope(phone, "all", "short"),
+      /minimum 10 characters/
+    );
+  });
+
+  await runTest("DND audit history stores masked phone numbers and preserves full event trail", async () => {
+    const repo = new InMemoryDndRepository();
+    const phone = "+919876543210";
+
+    await repo.save(createDndRecord({ phoneNumber: phone, scope: "voice", reason: "Customer opt-out" }));
+    await repo.removeScope(phone, "voice", "Customer called support to remove DND");
+
+    const auditHistory = repo.getAuditHistory();
+    assert.equal(auditHistory.length, 2);
+
+    const regEvent = auditHistory[0];
+    assert.equal(regEvent.action, "REGISTER_DND");
+    assert.equal(regEvent.phoneNumberMasked, "+91******3210");
+    assert.equal(regEvent.phoneNumberMasked.includes("987654"), false); // No raw phone leak
+
+    const remEvent = auditHistory[1];
+    assert.equal(remEvent.action, "REMOVE_DND");
+    assert.equal(remEvent.phoneNumberMasked, "+91******3210");
+    assert.equal(remEvent.justification, "Customer called support to remove DND");
   });
 
   await runTest("Recognizes English, Hindi, and Telugu opt-out phrases deterministically", () => {
     const positiveCases = [
-      // English
       "STOP",
       "Stop",
       "  stop  ",
@@ -259,21 +443,18 @@ async function runSuite() {
       "DO NOT CALL",
       "Don't call me",
       "Please stop calling",
-      // Hindi (Devanagari)
       "रोको",
       "बंद करो",
       "कॉल मत करो",
       "संदेश मत भेजो",
       "अनसब्सक्राइब",
       "फोन मत करना",
-      // Telugu (Script)
       "ఆపండి",
       "వద్దు",
       "కాల్ చేయవద్దు",
       "ఫోన్ చేయకండి",
       "మెసేజ్ చేయవద్దు",
       "రద్దు చేయండి",
-      // Hinglish / Tenglish
       "band karo",
       "call mat karo",
       "aapandi",
@@ -311,9 +492,9 @@ async function runSuite() {
   });
 
   /* ======================================================================== */
-  /* 3. Communication Policy Engine                                           */
+  /* 3. Communication Policy & Server-Side Orchestration Boundary             */
   /* ======================================================================== */
-  console.log("\n3. Communication Policy Engine");
+  console.log("\n3. Communication Policy Engine & Server-Side Orchestration");
 
   await runTest("Blocks communication when feature flag is disabled", () => {
     const original = process.env.VOICE_BOOKING_ENABLED;
@@ -398,7 +579,7 @@ async function runSuite() {
         channel: "voice",
         purpose: "voice_booking",
       },
-      { consentRecords: [grant], dndRecord: dnd },
+      { consentRecords: [grant], activeDndScopes: [dnd] },
       { checkFeatureFlag: false }
     );
 
@@ -478,17 +659,82 @@ async function runSuite() {
     assert.equal(decision.reason, "ALLOWED");
   });
 
-  await runTest("Masks phone number in policy result without leaking PII", () => {
-    assert.equal(maskPhoneNumber("+919876543210"), "+91******3210");
+  await runTest("Server-Side Orchestration: orchestrateCommunicationPolicy loads authoritative repository data", async () => {
+    const consentRepo = new InMemoryConsentRepository();
+    const dndRepo = new InMemoryDndRepository();
+    const phone = "+919876543210";
+
+    // Add active consent
+    await consentRepo.save(
+      createConsentRecord({
+        phoneNumber: phone,
+        channel: "voice",
+        purpose: "voice_booking",
+        consentText: "I consent to calls",
+      })
+    );
+
+    const daytimeUtc = new Date("2026-11-01T06:00:00.000Z"); // 11:30 IST
+
+    const decision = await orchestrateCommunicationPolicy(
+      {
+        phoneNumber: "9876543210",
+        channel: "voice",
+        purpose: "voice_booking",
+        currentTime: daytimeUtc,
+      },
+      { consentRepository: consentRepo, dndRepository: dndRepo },
+      { checkFeatureFlag: false }
+    );
+
+    assert.equal(decision.status, "allowed");
+    assert.equal(decision.reason, "ALLOWED");
+    assert.equal(decision.phoneNumberMasked, "+91******3210");
+  });
+
+  await runTest("Server-Side Orchestration: Blocks when repository returns mismatched phone number (Integrity Check)", async () => {
+    // Malicious or buggy repository returning records for a different phone number
+    const tamperedConsentRepo: InMemoryConsentRepository = {
+      ...new InMemoryConsentRepository(),
+      findByPhone: async () => [
+        createConsentRecord({
+          phoneNumber: "+911111111111", // Mismatched!
+          channel: "voice",
+          purpose: "voice_booking",
+          consentText: "Other user consent",
+        }),
+      ],
+    } as unknown as InMemoryConsentRepository;
+
+    const dndRepo = new InMemoryDndRepository();
+
+    const decision = await orchestrateCommunicationPolicy(
+      {
+        phoneNumber: "9876543210",
+        channel: "voice",
+        purpose: "voice_booking",
+      },
+      { consentRepository: tamperedConsentRepo, dndRepository: dndRepo },
+      { checkFeatureFlag: false }
+    );
+
+    assert.equal(decision.status, "blocked");
+    assert.equal(decision.reason, "REPOSITORY_INTEGRITY_MISMATCH");
   });
 
   /* ======================================================================== */
   /* 4. Provider Contracts & Deterministic Mocks                             */
   /* ======================================================================== */
-  console.log("\n4. Provider Contracts & Deterministic Mocks");
+  console.log("\n4. Provider Contracts & Simulation Mocks");
 
-  await runTest("MockVoiceProvider handles successful lifecycle deterministically", async () => {
+  await runTest("MockVoiceProvider clearly identifies as simulation with deterministic status and IDs", async () => {
     const voiceProvider = new MockVoiceProvider();
+    assert.equal(voiceProvider.isSimulated, true);
+    assert.equal(voiceProvider.providerMode, "mock");
+
+    // Inject deterministic ID and timestamp
+    voiceProvider.setNextCallId("call_det_001");
+    voiceProvider.setNextTimestamp("2026-11-01T10:00:00.000Z");
 
     const startRes = await voiceProvider.startSession({
       sessionId: "sess_voice_101",
@@ -497,14 +743,18 @@ async function runSuite() {
     });
 
     assert.equal(startRes.sessionId, "sess_voice_101");
-    assert.equal(startRes.status, "initiated");
-    assert.ok(startRes.providerCallId.startsWith("mock_call_"));
+    assert.equal(startRes.providerCallId, "call_det_001");
+    assert.equal(startRes.status, "simulated_initiated");
+    assert.equal(startRes.startedAt, "2026-11-01T10:00:00.000Z");
+    assert.equal(startRes.isSimulated, true);
+    assert.equal(startRes.providerMode, "mock");
 
     const statusRes = await voiceProvider.getStatus("sess_voice_101");
-    assert.equal(statusRes.status, "in_progress");
+    assert.equal(statusRes.status, "simulated_in_progress");
+    assert.equal(statusRes.isSimulated, true);
 
     const endRes = await voiceProvider.endSession("sess_voice_101");
-    assert.equal(endRes.status, "ended");
+    assert.equal(endRes.status, "simulated_ended");
     assert.equal(voiceProvider.getActiveSessionCount(), 0);
   });
 
@@ -523,8 +773,14 @@ async function runSuite() {
     );
   });
 
-  await runTest("MockWhatsAppProvider handles transactional template dispatch", async () => {
+  await runTest("MockWhatsAppProvider clearly identifies as simulation with deterministic message ID", async () => {
     const waProvider = new MockWhatsAppProvider();
+    assert.equal(waProvider.isSimulated, true);
+    assert.equal(waProvider.providerMode, "mock");
+
+    // Inject deterministic message ID and timestamp
+    waProvider.setNextMessageId("wa_det_789");
+    waProvider.setNextTimestamp("2026-11-01T10:05:00.000Z");
 
     const sendRes = await waProvider.sendTemplate({
       to: "+919876543210",
@@ -541,13 +797,17 @@ async function runSuite() {
       ],
     });
 
-    assert.ok(sendRes.messageId.startsWith("mock_wa_"));
-    assert.equal(sendRes.status, "accepted");
+    assert.equal(sendRes.messageId, "wa_det_789");
+    assert.equal(sendRes.status, "simulated_accepted");
+    assert.equal(sendRes.dispatchedAt, "2026-11-01T10:05:00.000Z");
+    assert.equal(sendRes.isSimulated, true);
+    assert.equal(sendRes.providerMode, "mock");
     assert.equal(waProvider.getDispatchedMessageCount(), 1);
     assert.equal(waProvider.getLastDispatchedTemplateName(), "brew_booking_quote_v1");
 
     const statusRes = await waProvider.getMessageStatus(sendRes.messageId);
-    assert.equal(statusRes.status, "delivered");
+    assert.equal(statusRes.status, "simulated_delivered");
+    assert.equal(statusRes.isSimulated, true);
   });
 
   await runTest("MockWhatsAppProvider simulates provider failure cleanly", async () => {
@@ -567,7 +827,6 @@ async function runSuite() {
   });
 
   await runTest("Zero external network requests from mock providers", async () => {
-    // Monkey-patch http.request and https.request to ensure neither is called
     let networkRequestAttempted = false;
     const origHttpRequest = http.request;
     const origHttpsRequest = https.request;
@@ -612,7 +871,7 @@ async function runSuite() {
   /* Final Summary                                                            */
   /* ======================================================================== */
   console.log("\n---------------------------------------------------------------");
-  console.log(`Phase 6.1 Results: ${passedCount} passed, ${failedCount} failed`);
+  console.log(`Phase 6.1.1 Results: ${passedCount} passed, ${failedCount} failed`);
   console.log("---------------------------------------------------------------");
 
   if (failedCount > 0) {

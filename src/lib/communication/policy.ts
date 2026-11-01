@@ -1,17 +1,20 @@
 /**
- * BREW Coffee Platform — Phase 6.1 Communication Policy Engine
- * Evaluates feature flags, consent grants, DND suppression, and calling-hour policies.
+ * BREW Coffee Platform — Phase 6.1.1 Communication Policy Engine
+ * Evaluates feature flags, consent grants, DND multi-scope suppression, and calling-hour policies.
+ * Provides both pure functional rule evaluation and secure server-side orchestration boundaries.
  */
 
 import {
   ConsentRecord,
+  ConsentRepository,
   DndRecord,
+  DndRepository,
   PolicyEvaluationRequest,
   PolicyEvaluationResult,
 } from "./types";
 import { isVoiceBookingEnabled, maskPhoneNumber } from "./config";
 import { normalizePhoneNumber, hasActiveConsent } from "./consent";
-import { isChannelBlockedByDnd } from "./dnd";
+import { isChannelBlockedByDnd, isChannelBlockedByDndScopes } from "./dnd";
 
 export const CALLING_HOURS_TIMEZONE = "Asia/Kolkata";
 export const CALLING_HOURS_START_HOUR = 9; // 09:00:00 IST
@@ -71,20 +74,15 @@ export interface PolicyEvaluationOptions {
 }
 
 /**
- * Evaluates whether an outbound communication can be dispatched.
- * 
- * Checks in sequence:
- * 1. Feature Flag: Must be explicitly enabled (VOICE_BOOKING_ENABLED=true).
- * 2. Phone Validity: Must normalize to E.164.
- * 3. Do-Not-Contact (DND): Must not be blocked by an active DND entry.
- * 4. Consent: Must have active, unrevoked consent for the exact (channel, purpose).
- * 5. Calling Hours: Applies ONLY to voice calls in Asia/Kolkata (09:00 - 20:00 IST).
+ * Pure evaluation function checking whether an outbound communication can be dispatched.
+ * Receives pre-loaded records for direct unit testing of policy rules.
  */
 export function evaluateCommunicationPolicy(
   request: PolicyEvaluationRequest,
   context: {
     consentRecords: ConsentRecord[];
     dndRecord?: DndRecord | null;
+    activeDndScopes?: DndRecord[];
   },
   options: PolicyEvaluationOptions = {}
 ): PolicyEvaluationResult {
@@ -119,7 +117,11 @@ export function evaluateCommunicationPolicy(
   }
 
   // 3. Do-Not-Contact (DND) Check
-  if (isChannelBlockedByDnd(context.dndRecord, request.channel)) {
+  const dndBlocked = context.activeDndScopes
+    ? isChannelBlockedByDndScopes(context.activeDndScopes, request.channel)
+    : isChannelBlockedByDnd(context.dndRecord, request.channel);
+
+  if (dndBlocked) {
     return {
       status: "blocked",
       reason: "DND_ACTIVE",
@@ -139,11 +141,12 @@ export function evaluateCommunicationPolicy(
   );
 
   if (!hasConsent) {
-    // Check if customer explicitly opted out/revoked
     const matchingRecords = context.consentRecords.filter(
       (r) => r.channel === request.channel && r.purpose === request.purpose
     );
-    const wasRevoked = matchingRecords.some((r) => r.revokedAt);
+    const wasRevoked = matchingRecords.some(
+      (r) => r.eventType === "revoke" || r.revokedAt || !r.granted
+    );
 
     if (wasRevoked) {
       return {
@@ -206,4 +209,123 @@ export function evaluateCommunicationPolicy(
     purpose: request.purpose,
     phoneNumberMasked: maskPhoneNumber(normalizedPhone),
   };
+}
+
+/**
+ * Secure Server-Side Orchestration Boundary
+ * 
+ * Responsibilities:
+ * 1. Normalizes the incoming phone number.
+ * 2. Loads consent history from repository using the normalized number.
+ * 3. Loads all active DND scopes from repository using the normalized number.
+ * 4. Verifies data integrity: checks that returned records match the requested phone number.
+ * 5. Evaluates policy (feature flag, DND, consent, calling hours).
+ * 6. Returns structured decision without calling any external provider.
+ */
+export async function orchestrateCommunicationPolicy(
+  request: PolicyEvaluationRequest,
+  dependencies: {
+    consentRepository: ConsentRepository;
+    dndRepository: DndRepository;
+  },
+  options: PolicyEvaluationOptions = {}
+): Promise<PolicyEvaluationResult> {
+  const evaluatedAt = (request.currentTime || new Date()).toISOString();
+
+  // 1. Feature Flag Check
+  if (options.checkFeatureFlag !== false && !isVoiceBookingEnabled()) {
+    return {
+      status: "blocked",
+      reason: "FEATURE_DISABLED",
+      details: "Voice booking and outbound communication is disabled via feature flag.",
+      evaluatedAt,
+      channel: request.channel,
+      purpose: request.purpose,
+      phoneNumberMasked: maskPhoneNumber(request.phoneNumber),
+    };
+  }
+
+  // 2. Normalize Phone Number
+  const normalizedPhone = normalizePhoneNumber(request.phoneNumber);
+  if (!normalizedPhone) {
+    return {
+      status: "blocked",
+      reason: "INVALID_PHONE_NUMBER",
+      details: "The provided phone number is invalid or cannot be normalized to E.164.",
+      evaluatedAt,
+      channel: request.channel,
+      purpose: request.purpose,
+      phoneNumberMasked: maskPhoneNumber(request.phoneNumber),
+    };
+  }
+
+  // 3. Load DND Scopes from Repository
+  let activeDndScopes: DndRecord[] = [];
+  try {
+    activeDndScopes = await dependencies.dndRepository.findActiveScopes(normalizedPhone);
+  } catch (err) {
+    return {
+      status: "blocked",
+      reason: "REPOSITORY_INTEGRITY_MISMATCH",
+      details: `Failed to retrieve DND records from repository: ${err instanceof Error ? err.message : String(err)}`,
+      evaluatedAt,
+      channel: request.channel,
+      purpose: request.purpose,
+      phoneNumberMasked: maskPhoneNumber(normalizedPhone),
+    };
+  }
+
+  // Security Check: Verify repository phone number integrity
+  const dndPhoneMismatch = activeDndScopes.some((r) => r.phoneNumber !== normalizedPhone);
+  if (dndPhoneMismatch) {
+    return {
+      status: "blocked",
+      reason: "REPOSITORY_INTEGRITY_MISMATCH",
+      details: "Security violation: DND repository returned records belonging to a different phone number.",
+      evaluatedAt,
+      channel: request.channel,
+      purpose: request.purpose,
+      phoneNumberMasked: maskPhoneNumber(normalizedPhone),
+    };
+  }
+
+  // 4. Load Consent Events from Repository
+  let consentEvents: ConsentRecord[] = [];
+  try {
+    consentEvents = await dependencies.consentRepository.findByPhone(normalizedPhone);
+  } catch (err) {
+    return {
+      status: "blocked",
+      reason: "REPOSITORY_INTEGRITY_MISMATCH",
+      details: `Failed to retrieve consent records from repository: ${err instanceof Error ? err.message : String(err)}`,
+      evaluatedAt,
+      channel: request.channel,
+      purpose: request.purpose,
+      phoneNumberMasked: maskPhoneNumber(normalizedPhone),
+    };
+  }
+
+  // Security Check: Verify consent repository phone number integrity
+  const consentPhoneMismatch = consentEvents.some((r) => r.phoneNumber !== normalizedPhone);
+  if (consentPhoneMismatch) {
+    return {
+      status: "blocked",
+      reason: "REPOSITORY_INTEGRITY_MISMATCH",
+      details: "Security violation: Consent repository returned records belonging to a different phone number.",
+      evaluatedAt,
+      channel: request.channel,
+      purpose: request.purpose,
+      phoneNumberMasked: maskPhoneNumber(normalizedPhone),
+    };
+  }
+
+  // 5. Evaluate pure policy with authoritative repository data
+  return evaluateCommunicationPolicy(
+    request,
+    {
+      consentRecords: consentEvents,
+      activeDndScopes,
+    },
+    options
+  );
 }

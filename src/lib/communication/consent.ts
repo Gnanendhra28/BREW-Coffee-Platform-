@@ -1,6 +1,6 @@
 /**
- * BREW Coffee Platform — Phase 6.1 Consent Engine & Pure Rules
- * Pure functions for phone normalization, consent verification, and audit trail generation.
+ * BREW Coffee Platform — Phase 6.1.1 Consent Engine & Event History
+ * Pure functions for phone normalization, consent event verification, and audit trail generation.
  */
 
 import {
@@ -61,7 +61,21 @@ export function assertValidPhoneNumber(phone: string): string {
 }
 
 /**
- * Creates a validated, auditable ConsentRecord.
+ * Validates an ISO 8601 UTC timestamp string, throwing an Error if invalid.
+ */
+export function assertValidTimestamp(timestamp: string): number {
+  if (!timestamp || typeof timestamp !== "string") {
+    throw new Error(`Invalid timestamp format: "${timestamp}"`);
+  }
+  const timeMs = Date.parse(timestamp);
+  if (isNaN(timeMs)) {
+    throw new Error(`Timestamp "${timestamp}" cannot be parsed as a valid date`);
+  }
+  return timeMs;
+}
+
+/**
+ * Creates a validated, auditable ConsentRecord representing an explicit GRANT event.
  */
 export function createConsentRecord(params: {
   phoneNumber: string;
@@ -74,14 +88,17 @@ export function createConsentRecord(params: {
 }): ConsentRecord {
   const normalizedPhone = assertValidPhoneNumber(params.phoneNumber);
   const nowUtc = params.timestamp || new Date().toISOString();
+  assertValidTimestamp(nowUtc);
+
   const randomSuffix = Math.random().toString(36).substring(2, 8);
-  const id = `consent_${Date.now()}_${randomSuffix}`;
+  const id = `consent_grant_${Date.now()}_${randomSuffix}`;
 
   const record: ConsentRecord = {
     id,
     phoneNumber: normalizedPhone,
     channel: params.channel,
     purpose: params.purpose,
+    eventType: "grant",
     granted: true,
     consentText: params.consentText.trim(),
     consentVersion: params.consentVersion || "v1.0",
@@ -93,38 +110,85 @@ export function createConsentRecord(params: {
 }
 
 /**
- * Revokes an existing consent record, returning an updated record.
+ * Creates a validated ConsentRecord representing an explicit REVOCATION event.
+ * Represents a distinct historical event with its own timestamp and reason.
+ */
+export function createRevocationRecord(params: {
+  phoneNumber: string;
+  channel: CommunicationChannel;
+  purpose: CommunicationPurpose;
+  reason?: string;
+  enquiryId?: string;
+  timestamp?: string;
+}): ConsentRecord {
+  const normalizedPhone = assertValidPhoneNumber(params.phoneNumber);
+  const nowUtc = params.timestamp || new Date().toISOString();
+  assertValidTimestamp(nowUtc);
+
+  const randomSuffix = Math.random().toString(36).substring(2, 8);
+  const id = `consent_revoke_${Date.now()}_${randomSuffix}`;
+
+  const record: ConsentRecord = {
+    id,
+    phoneNumber: normalizedPhone,
+    channel: params.channel,
+    purpose: params.purpose,
+    eventType: "revoke",
+    granted: false,
+    consentText: "Consent revoked by customer request",
+    consentVersion: "v1.0",
+    timestamp: nowUtc,
+    reason: params.reason || "customer_requested_opt_out",
+    enquiryId: params.enquiryId,
+    revokedAt: nowUtc,
+    revocationReason: params.reason || "customer_requested_opt_out",
+  };
+
+  return ConsentRecordSchema.parse(record);
+}
+
+/**
+ * Helper to revoke an existing consent record by generating a distinct revocation event.
  */
 export function revokeConsentRecord(
   existing: ConsentRecord,
   reason = "customer_requested_opt_out",
   revokedAt?: string
 ): ConsentRecord {
-  const updated: ConsentRecord = {
-    ...existing,
-    revokedAt: revokedAt || new Date().toISOString(),
-    revocationReason: reason,
-  };
-
-  return ConsentRecordSchema.parse(updated);
+  return createRevocationRecord({
+    phoneNumber: existing.phoneNumber,
+    channel: existing.channel,
+    purpose: existing.purpose,
+    reason,
+    enquiryId: existing.enquiryId,
+    timestamp: revokedAt,
+  });
 }
 
 /**
- * Checks if a specific consent record has been revoked.
+ * Checks if a specific consent record represents a revocation or was revoked.
  */
 export function isConsentRevoked(record: ConsentRecord): boolean {
-  return Boolean(record.revokedAt);
+  return record.eventType === "revoke" || !record.granted || Boolean(record.revokedAt);
 }
 
 /**
- * Determines whether active consent exists for a given channel and purpose across all historical records.
+ * Determines whether active consent exists for a given channel and purpose across historical events.
  * 
  * Rules:
  * 1. Filters records strictly matching the requested channel and purpose.
- * 2. Orders records by timestamp descending (most recent action wins).
- * 3. If the most recent record was revoked or had granted: false, returns FALSE.
- * 4. A prior grant cannot override a later revocation.
- * 5. Granting transactional consent (voice_booking, transactional_update) NEVER satisfies marketing.
+ * 2. Validates timestamps, rejecting any corrupt or invalid timestamp entries.
+ * 3. Sorts events by timestamp descending.
+ * 4. Deterministic Tie-Breaking Rule for Concurrent Timestamps:
+ *    - Safety-First Rule: If two events share the exact same timestamp millisecond,
+ *      a "revoke" event ALWAYS takes precedence over a "grant" event.
+ *    - Tertiary: Lexicographical ID comparison descending.
+ * 5. The latest valid event in the sorted sequence dictates active consent:
+ *    - If eventType === "grant" and granted === true -> ACTIVE (true).
+ *    - If eventType === "revoke" or granted === false -> INACTIVE (false).
+ * 6. An older grant event submitted after a newer revocation is sorted after the revocation and cannot override it.
+ * 7. A genuinely new explicit grant event after revocation restores consent for that exact channel and purpose.
+ * 8. A grant for channel A / purpose A has zero effect on channel B / purpose B.
  */
 export function hasActiveConsent(
   records: ConsentRecord[],
@@ -133,28 +197,51 @@ export function hasActiveConsent(
 ): boolean {
   if (!records || records.length === 0) return false;
 
-  // Filter matching records for the specific channel and purpose
+  // 1. Filter matching channel and purpose
   const relevantRecords = records.filter(
     (r) => r.channel === channel && r.purpose === purpose
   );
 
   if (relevantRecords.length === 0) return false;
 
-  // Sort by effective event timestamp descending (newest first).
-  // A revocation event's timestamp is its revokedAt date.
-  const sorted = [...relevantRecords].sort((a, b) => {
-    const timeA = new Date(a.revokedAt || a.timestamp).getTime();
-    const timeB = new Date(b.revokedAt || b.timestamp).getTime();
-    return timeB - timeA;
+  // 2. Filter out records with invalid timestamps
+  const validRecords = relevantRecords.filter((r) => {
+    try {
+      assertValidTimestamp(r.timestamp);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  if (validRecords.length === 0) return false;
+
+  // 3. Sort descending with deterministic tie-breaking
+  const sorted = [...validRecords].sort((a, b) => {
+    const timeA = Date.parse(a.timestamp);
+    const timeB = Date.parse(b.timestamp);
+
+    // Primary: timestamp descending
+    if (timeB !== timeA) {
+      return timeB - timeA;
+    }
+
+    // Secondary (Deterministic Tie-Breaker): Safety-First Precedence
+    // A revocation event ALWAYS beats a grant event at the exact same timestamp
+    if (a.eventType !== b.eventType) {
+      return a.eventType === "revoke" ? -1 : 1;
+    }
+
+    // Tertiary: Lexicographical ID comparison descending
+    return b.id.localeCompare(a.id);
   });
 
   const latest = sorted[0];
 
-  // If latest action was revoked or not granted, consent is inactive
-  if (latest.revokedAt || !latest.granted) {
+  // Latest event dictates consent
+  if (latest.eventType === "revoke" || !latest.granted) {
     return false;
   }
 
-  // Check grant status
-  return latest.granted === true;
+  return latest.eventType === "grant" && latest.granted === true;
 }
