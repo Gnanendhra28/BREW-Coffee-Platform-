@@ -16,6 +16,15 @@ export class InvalidPhoneNumberError extends CommunicationError {
   }
 }
 
+export class InvalidConsentTimestampError extends CommunicationError {
+  constructor(
+    message = "Timestamp must be a strictly valid ISO 8601 UTC formatted string ending in 'Z' (e.g. YYYY-MM-DDTHH:mm:ss.sssZ)"
+  ) {
+    super(message, "INVALID_TIMESTAMP");
+    this.name = "InvalidConsentTimestampError";
+  }
+}
+
 export class ConsentMissingError extends CommunicationError {
   constructor(message = "Explicit consent has not been granted for this channel and purpose") {
     super(message, "CONSENT_MISSING");

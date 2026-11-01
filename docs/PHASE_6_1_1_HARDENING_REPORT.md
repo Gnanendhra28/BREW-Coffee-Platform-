@@ -27,6 +27,9 @@ During comprehensive review of Phase 6.1, five critical architectural edge cases
 5. **Ambiguous Mock Provider Statuses**:
    - *Problem*: Mock providers returned generic statuses (`initiated`, `delivered`) and random identifiers that could be mistaken for actual carrier or Meta Cloud API confirmations.
    - *Fix*: Standardized simulated statuses (`simulated_initiated`, `simulated_accepted`, `simulated_delivered`), explicit simulation indicators (`isSimulated: true`, `providerMode: "mock"`), and deterministic ID/timestamp injection for tests.
+6. **Permissive Timestamp Parsing (Phase 6.1.2 Hardening)**:
+   - *Problem*: `Date.parse()` permitted non-UTC offsets (e.g. `+05:30`), date-only strings (`2026-11-01`), and timestamps lacking explicit timezones, leading to ambiguity in consent event ordering across timezones.
+   - *Fix*: Replaced permissive parsing with strict ISO 8601 UTC validation (`YYYY-MM-DDTHH:mm:ss.sssZ` or `YYYY-MM-DDTHH:mm:ssZ`). Rejects non-Z offsets, date-only formats, invalid calendar dates (Feb 30, April 31, non-leap Feb 29), and out-of-range hours/minutes/seconds. Throws `InvalidConsentTimestampError`.
 
 ---
 
@@ -148,11 +151,13 @@ To eliminate ambiguity between simulation and real carrier/Meta delivery:
 
 ### 7.1 Dedicated Hardened Test Suite (`npm run test:p61`)
 ```text
-37 / 37 tests PASSED (100%):
-1. Consent Engine & Event History Semantics (13 tests)
+39 / 39 tests PASSED (100%):
+1. Consent Engine & Event History Semantics (15 tests)
   ✓ Normalizes standard 10-digit Indian numbers to E.164
   ✓ Rejects malformed or invalid phone numbers
-  ✓ Rejects invalid or unparseable timestamps
+  ✓ Validates strict ISO 8601 UTC timestamps (YYYY-MM-DDTHH:mm:ss.sssZ / YYYY-MM-DDTHH:mm:ssZ)
+  ✓ Rejects non-UTC, offset, date-only, invalid calendar, and malformed timestamps
+  ✓ Consent evaluation filters out events with non-UTC/invalid timestamps
   ✓ Creates validated, auditable ConsentRecord with E.164 phone and eventType='grant'
   ✓ Missing consent returns false
   ✓ Voice consent is independent of WhatsApp consent

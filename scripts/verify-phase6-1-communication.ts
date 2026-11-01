@@ -76,9 +76,62 @@ async function runSuite() {
     );
   });
 
-  await runTest("Rejects invalid or unparseable timestamps", () => {
-    assert.throws(() => assertValidTimestamp("not-a-date"), /cannot be parsed/);
-    assert.throws(() => assertValidTimestamp(""), /Invalid timestamp format/);
+  await runTest("Validates strict ISO 8601 UTC timestamps (YYYY-MM-DDTHH:mm:ss.sssZ / YYYY-MM-DDTHH:mm:ssZ)", () => {
+    // Valid timestamps ending in 'Z'
+    assert.doesNotThrow(() => assertValidTimestamp("2026-11-01T10:00:00.000Z"));
+    assert.doesNotThrow(() => assertValidTimestamp("2026-11-01T10:00:00Z"));
+    assert.doesNotThrow(() => assertValidTimestamp("2024-02-29T12:00:00.000Z")); // Valid leap year
+  });
+
+  await runTest("Rejects non-UTC, offset, date-only, invalid calendar, and malformed timestamps", () => {
+    const invalidTimestamps = [
+      "2026-11-01", // Date-only
+      "2026-11-01T12:00:00", // Missing timezone (no 'Z')
+      "2026-11-01T12:00:00+05:30", // Offset +05:30 rejected
+      "2026-11-01T12:00:00-04:00", // Offset -04:00 rejected
+      "2026-02-29T12:00:00.000Z", // Non-leap year Feb 29
+      "2026-02-30T12:00:00.000Z", // Feb 30 invalid
+      "2026-04-31T12:00:00.000Z", // April 31 invalid
+      "2026-13-01T12:00:00.000Z", // Month 13 invalid
+      "2026-11-32T12:00:00.000Z", // Day 32 invalid
+      "2026-11-01T24:00:00.000Z", // Hour 24 invalid
+      "2026-11-01T12:60:00.000Z", // Minute 60 invalid
+      "2026-11-01T12:00:60.000Z", // Second 60 invalid
+      "", // Empty string
+      "not-a-date", // Malformed
+      "2026/11/01 10:00:00", // Slashes
+    ];
+
+    for (const ts of invalidTimestamps) {
+      assert.throws(
+        () => assertValidTimestamp(ts),
+        (err: unknown) => err instanceof Error && err.name === "InvalidConsentTimestampError",
+        `Expected "${ts}" to be rejected by assertValidTimestamp`
+      );
+    }
+  });
+
+  await runTest("Consent evaluation filters out events with non-UTC/invalid timestamps", () => {
+    const validGrant = createConsentRecord({
+      phoneNumber: "9876543210",
+      channel: "voice",
+      purpose: "voice_booking",
+      consentText: "Valid grant",
+      timestamp: "2026-11-01T08:00:00.000Z",
+    });
+
+    // Fabricate record with non-UTC offset timestamp (e.g. +05:30)
+    const invalidOffsetRecord = {
+      ...validGrant,
+      id: "consent_invalid_offset",
+      timestamp: "2026-11-01T09:00:00+05:30", // Invalid non-Z timestamp
+      eventType: "revoke" as const,
+      granted: false,
+    };
+
+    // Even though invalidOffsetRecord appears newer, hasActiveConsent ignores it because it lacks strict UTC 'Z'
+    const history = [validGrant, invalidOffsetRecord];
+    assert.equal(hasActiveConsent(history, "voice", "voice_booking"), true);
   });
 
   await runTest("Creates validated, auditable ConsentRecord with E.164 phone and eventType='grant'", () => {

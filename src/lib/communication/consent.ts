@@ -8,8 +8,8 @@ import {
   CommunicationPurpose,
   ConsentRecord,
 } from "./types";
-import { ConsentRecordSchema, PhoneNumberSchema } from "./schemas";
-import { InvalidPhoneNumberError } from "./errors";
+import { ConsentRecordSchema, PhoneNumberSchema, isValidStrictIsoUtc } from "./schemas";
+import { InvalidConsentTimestampError, InvalidPhoneNumberError } from "./errors";
 
 /**
  * Normalizes an arbitrary phone string into canonical E.164 format.
@@ -61,17 +61,15 @@ export function assertValidPhoneNumber(phone: string): string {
 }
 
 /**
- * Validates an ISO 8601 UTC timestamp string, throwing an Error if invalid.
+ * Validates a strictly formatted ISO 8601 UTC timestamp string ending in 'Z', throwing InvalidConsentTimestampError if invalid.
  */
 export function assertValidTimestamp(timestamp: string): number {
-  if (!timestamp || typeof timestamp !== "string") {
-    throw new Error(`Invalid timestamp format: "${timestamp}"`);
+  if (!isValidStrictIsoUtc(timestamp)) {
+    throw new InvalidConsentTimestampError(
+      `Timestamp "${timestamp}" is not a valid ISO 8601 UTC timestamp in YYYY-MM-DDTHH:mm:ss.sssZ format.`
+    );
   }
-  const timeMs = Date.parse(timestamp);
-  if (isNaN(timeMs)) {
-    throw new Error(`Timestamp "${timestamp}" cannot be parsed as a valid date`);
-  }
-  return timeMs;
+  return Date.parse(timestamp);
 }
 
 /**

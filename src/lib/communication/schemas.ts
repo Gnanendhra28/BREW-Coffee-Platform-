@@ -28,13 +28,48 @@ export const CommunicationPurposeSchema = z.enum([
 export const ConsentEventTypeSchema = z.enum(["grant", "revoke"]);
 
 /**
- * Validates ISO 8601 UTC date-time string, explicitly rejecting invalid or unparseable timestamps.
+ * Validates strictly formatted ISO 8601 UTC date-time string:
+ * - Format: YYYY-MM-DDTHH:mm:ss.sssZ or YYYY-MM-DDTHH:mm:ssZ (must end strictly in 'Z').
+ * - Rejects date-only strings, offsets (+05:30, -04:00), missing timezones.
+ * - Rejects invalid calendar dates (Feb 30, April 31, non-leap Feb 29).
+ * - Rejects invalid time units (hours > 23, minutes > 59, seconds > 59).
  */
-export const IsoUtcDateTimeSchema = z.string().refine((val) => {
+export function isValidStrictIsoUtc(val: unknown): val is string {
   if (!val || typeof val !== "string") return false;
-  const time = Date.parse(val);
-  return !isNaN(time);
-}, "Timestamp must be a valid parseable ISO 8601 date string");
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/.exec(val);
+  if (!match) return false;
+
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
+  const day = parseInt(match[3], 10);
+  const hour = parseInt(match[4], 10);
+  const minute = parseInt(match[5], 10);
+  const second = parseInt(match[6], 10);
+  const msStr = match[7] || "0";
+  const ms = parseInt(msStr.padEnd(3, "0"), 10);
+
+  if (month < 1 || month > 12) return false;
+  if (day < 1 || day > 31) return false;
+  if (hour > 23 || minute > 59 || second > 59 || ms > 999) return false;
+
+  const d = new Date(Date.UTC(year, month - 1, day, hour, minute, second, ms));
+  if (isNaN(d.getTime())) return false;
+
+  return (
+    d.getUTCFullYear() === year &&
+    d.getUTCMonth() === month - 1 &&
+    d.getUTCDate() === day &&
+    d.getUTCHours() === hour &&
+    d.getUTCMinutes() === minute &&
+    d.getUTCSeconds() === second
+  );
+}
+
+export const IsoUtcDateTimeSchema = z.string().refine(
+  isValidStrictIsoUtc,
+  "Timestamp must be a strictly valid ISO 8601 UTC date-time string ending in 'Z' (e.g. 2026-11-01T10:00:00.000Z)"
+);
 
 export const ConsentRecordSchema = z.object({
   id: z.string().min(8, "Consent ID must be at least 8 characters"),
