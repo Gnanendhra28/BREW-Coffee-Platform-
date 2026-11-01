@@ -1,10 +1,45 @@
 /**
- * BREW Coffee Platform — Phase 6.2 Voice Booking Schemas
- * Runtime Zod validation for conversation state, booking requirements, messages, and sessions.
+ * BREW Coffee Platform — Phase 6.2.1 Voice Booking Schemas
+ * Runtime Zod validation for conversation state, booking requirements, extraction payloads,
+ * messages, and sessions. Hardened with strict Gemini output schema and calendar date validation.
  */
 
 import { z } from "zod";
 import { PhoneNumberSchema, isValidStrictIsoUtc } from "../communication/schemas";
+
+/**
+ * Validates real calendar dates in YYYY-MM-DD format:
+ * - Checks Gregorian calendar leap years, 30/31 day month boundaries.
+ * - Rejects Feb 29 on non-leap years, Feb 30, April 31, etc.
+ */
+export function isValidCalendarDate(val: unknown): val is string {
+  if (typeof val !== "string") return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(val);
+  if (!match) return false;
+
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
+  const day = parseInt(match[3], 10);
+
+  if (month < 1 || month > 12) return false;
+  if (day < 1 || day > 31) return false;
+
+  const d = new Date(Date.UTC(year, month - 1, day));
+  return (
+    d.getUTCFullYear() === year &&
+    d.getUTCMonth() === month - 1 &&
+    d.getUTCDate() === day
+  );
+}
+
+/**
+ * Validates 24-hour time in HH:mm format (00:00 to 23:59).
+ */
+export function isValidTime24(val: unknown): val is string {
+  if (typeof val !== "string") return false;
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(val);
+  return match !== null;
+}
 
 export const VoiceBookingStateSchema = z.enum([
   "created",
@@ -28,6 +63,31 @@ export const StrictIsoUtcSchema = z.string().refine(isValidStrictIsoUtc, {
   message: "Timestamp must be a valid ISO 8601 UTC string ending with 'Z' (e.g. 2026-11-01T10:00:00.000Z)",
 });
 
+export const CalendarDateSchema = z.string().refine(isValidCalendarDate, {
+  message: "Event date must be a real calendar date in YYYY-MM-DD format (e.g. 2026-12-15)",
+});
+
+export const Time24Schema = z.string().refine(isValidTime24, {
+  message: "Start time must be in 24-hour HH:mm format between 00:00 and 23:59",
+});
+
+export const ConfirmationIntentSchema = z.enum([
+  "positive_acceptance",
+  "rejection",
+  "clarification_requested",
+  "modification_requested",
+  "ambiguous",
+]);
+
+export const RequirementCorrectionRecordSchema = z.object({
+  field: z.string().min(1),
+  previousValue: z.unknown(),
+  newValue: z.unknown(),
+  action: z.enum(["update", "clear"]),
+  timestamp: StrictIsoUtcSchema,
+  source: z.string().min(1),
+});
+
 export const BookingRequirementsSchema = z.object({
   guestCount: z
     .number()
@@ -35,14 +95,8 @@ export const BookingRequirementsSchema = z.object({
     .min(10, "Minimum guest count is 10")
     .max(1000, "Maximum guest count is 1000")
     .nullable(),
-  eventDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Event date must be in YYYY-MM-DD format")
-    .nullable(),
-  startTime: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Start time must be in 24-hour HH:mm format")
-    .nullable(),
+  eventDate: CalendarDateSchema.nullable(),
+  startTime: Time24Schema.nullable(),
   durationHours: z
     .number()
     .min(1, "Minimum duration is 1 hour")
@@ -61,7 +115,35 @@ export const BookingRequirementsSchema = z.object({
   confidenceScore: z.number().min(0).max(1),
   missingFields: z.array(z.string()),
   unresolvedQuestions: z.array(z.string()),
+  corrections: z.array(RequirementCorrectionRecordSchema).optional().default([]),
 });
+
+/**
+ * Strict schema for Gemini model extraction output.
+ * Rejects unexpected properties, enforces calendar correctness, bounds, and typed enums.
+ */
+export const GeminiExtractionOutputSchema = z
+  .object({
+    guestCount: z
+      .number()
+      .int()
+      .min(10, "Minimum guest count is 10")
+      .max(1000, "Maximum guest count is 1000")
+      .nullable(),
+    eventDate: CalendarDateSchema.nullable(),
+    startTime: Time24Schema.nullable(),
+    durationHours: z.number().min(1).max(12).nullable(),
+    venueAddress: z.string().trim().min(3).nullable(),
+    eventType: z.string().trim().nullable(),
+    beveragePreferences: z.array(z.string().trim()),
+    selectedTier: z.enum(["BASIC", "STANDARD", "PREMIUM"]).nullable(),
+    handoffRequested: z.boolean(),
+    customerConfirmed: z.boolean(),
+    confirmationIntent: ConfirmationIntentSchema.nullable().default(null),
+    confidenceScore: z.number().min(0).max(1).optional().default(1.0),
+    clearedFields: z.array(z.string()).optional().default([]),
+  })
+  .strict();
 
 export const ConversationMessageSchema = z.object({
   id: z.string().min(1),

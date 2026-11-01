@@ -1,6 +1,7 @@
 /**
- * BREW Coffee Platform — Phase 6.2 Voice Booking Types
+ * BREW Coffee Platform — Phase 6.2.1 Voice Booking Types
  * Strongly typed domain entities for the multilingual AI conversation engine.
+ * Hardened with explicit confirmation intents, patch models, and extraction results.
  */
 
 import { EventQuotationRecord } from "../eventBookingConcierge/types";
@@ -22,10 +23,26 @@ export type VoiceBookingState =
 
 export type SupportedLanguage = "en" | "hi" | "te";
 
+export type ConfirmationIntent =
+  | "positive_acceptance"
+  | "rejection"
+  | "clarification_requested"
+  | "modification_requested"
+  | "ambiguous";
+
+export interface RequirementCorrectionRecord {
+  field: string;
+  previousValue: unknown;
+  newValue: unknown;
+  action: "update" | "clear";
+  timestamp: string; // Strict ISO UTC
+  source: string;
+}
+
 export interface BookingRequirements {
   guestCount: number | null;
-  eventDate: string | null; // YYYY-MM-DD
-  startTime: string | null; // HH:mm
+  eventDate: string | null; // Real calendar date YYYY-MM-DD
+  startTime: string | null; // 24-hr format HH:mm
   durationHours: number | null; // 1 to 12
   venueAddress: string | null;
   eventType: string | null;
@@ -36,6 +53,50 @@ export interface BookingRequirements {
   confidenceScore: number;
   missingFields: string[];
   unresolvedQuestions: string[];
+  corrections?: RequirementCorrectionRecord[];
+}
+
+export type FieldPatchAction = "set" | "update" | "clear" | "keep" | "uncertain";
+
+export interface RequirementFieldPatch<T> {
+  action: FieldPatchAction;
+  value?: T;
+  previousValue?: T;
+  confidence?: number;
+  reason?: string;
+}
+
+export interface BookingRequirementsPatch {
+  guestCount?: RequirementFieldPatch<number>;
+  eventDate?: RequirementFieldPatch<string>;
+  startTime?: RequirementFieldPatch<string>;
+  durationHours?: RequirementFieldPatch<number>;
+  venueAddress?: RequirementFieldPatch<string>;
+  eventType?: RequirementFieldPatch<string>;
+  beveragePreferences?: RequirementFieldPatch<string[]>;
+  selectedTier?: RequirementFieldPatch<"BASIC" | "STANDARD" | "PREMIUM">;
+  handoffRequested?: RequirementFieldPatch<boolean>;
+  confirmationIntent?: RequirementFieldPatch<ConfirmationIntent>;
+}
+
+export type ExtractionStatus =
+  | "success"
+  | "invalid_response"
+  | "api_failure"
+  | "low_confidence"
+  | "service_unavailable";
+
+export type ExtractionSource = "gemini" | "mock";
+
+export interface StructuredExtractionResult {
+  status: ExtractionStatus;
+  source: ExtractionSource;
+  data: Partial<BookingRequirements> | null;
+  confidenceScore: number;
+  confirmationIntent?: ConfirmationIntent;
+  clearedFields?: string[];
+  error?: string;
+  rawResponse?: string;
 }
 
 export interface ConversationMessage {
@@ -69,6 +130,7 @@ export interface ConversationTurnResult {
   quotation: EventQuotationRecord | null;
   clarificationNeeded: string[];
   handoffTriggered: boolean;
+  extractionResult?: StructuredExtractionResult;
 }
 
 export interface LanguageDetectionResult {
@@ -82,7 +144,7 @@ export interface ExtractionProvider {
     text: string,
     current: BookingRequirements,
     language: SupportedLanguage
-  ): Promise<Partial<BookingRequirements>>;
+  ): Promise<StructuredExtractionResult>;
   detectLanguage?(
     text: string,
     currentLanguage?: SupportedLanguage

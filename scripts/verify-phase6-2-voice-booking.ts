@@ -10,7 +10,6 @@ import {
   approveBookingByStaff,
   transitionVoiceBookingState,
   canTransition,
-  getMissingMandatoryFields,
   detectLanguage,
   detectScript,
   generateVoiceBookingQuotation,
@@ -384,9 +383,9 @@ async function runTests() {
   console.log("\nSuite 8: Safeguards & Escape Hatches");
 
   // 1. Human handoff
-  let handoffSession = createVoiceBookingSession("+919876543211", "en");
+  const handoffSession = createVoiceBookingSession("+919876543211", "en");
   await repo.save(handoffSession);
-  let handoffTurn = await processConversationTurn(
+  const handoffTurn = await processConversationTurn(
     handoffSession,
     "Can I please speak with a human manager?",
     { extractionProvider: provider, sessionRepository: repo }
@@ -395,9 +394,9 @@ async function runTests() {
   assert(handoffTurn.handoffTriggered === true, "Turn result flags handoffTriggered = true");
 
   // 2. Cancellation
-  let cancelSession = createVoiceBookingSession("+919876543212", "en");
+  const cancelSession = createVoiceBookingSession("+919876543212", "en");
   await repo.save(cancelSession);
-  let cancelTurn = await processConversationTurn(
+  const cancelTurn = await processConversationTurn(
     cancelSession,
     "cancel booking",
     { extractionProvider: provider, sessionRepository: repo }
@@ -405,12 +404,12 @@ async function runTests() {
   assert(cancelTurn.state === "cancelled", "User cancel request triggers state 'cancelled'");
 
   // 3. Customer decline
-  let declineSession = createVoiceBookingSession("+919876543213", "en");
+  const declineSession = createVoiceBookingSession("+919876543213", "en");
   declineSession.state = "awaiting_customer_confirmation";
   declineSession.requirements = validReqs;
   await repo.save(declineSession);
 
-  let declineTurn = await processConversationTurn(
+  const declineTurn = await processConversationTurn(
     declineSession,
     "No, the price is too high, decline this quote",
     { extractionProvider: provider, sessionRepository: repo }

@@ -1,13 +1,14 @@
 /**
- * BREW Coffee Platform — Phase 6.2 Voice Booking Quotation Adapter
+ * BREW Coffee Platform — Phase 6.2.1 Voice Booking Quotation Adapter
  * Deterministic pricing bridge to Event Booking Concierge calculation engine.
- * Guarantees zero AI price fabrication: all prices, margins, and tier breakdowns
- * are calculated purely via verified domain logic.
+ * Eliminates all fabricated business defaults: strictly validates real calendar dates,
+ * boundaries, and start/end times before generating auditable catering quotations.
  */
 
 import { generateEventQuotationRecord } from "../eventBookingConcierge/quoteEngine";
 import { EventQuotationRecord, EventType, ServiceLevel } from "../eventBookingConcierge/types";
 import { BookingRequirements, SupportedLanguage } from "./types";
+import { isValidCalendarDate, isValidTime24 } from "./schemas";
 
 /**
  * Normalizes an arbitrary event type string to the domain EventType enum.
@@ -30,41 +31,108 @@ function normalizeEventType(raw?: string | null): EventType {
   return "corporate";
 }
 
+export interface QuotationValidationResult {
+  isValid: boolean;
+  errors: string[];
+}
+
+/**
+ * Validates that all mandatory fields are present and operationally valid for quotation.
+ * Disallows fabricated dates, placeholder durations, and silent midnight wrapping.
+ */
+export function validateQuotationRequirements(
+  requirements: BookingRequirements
+): QuotationValidationResult {
+  const errors: string[] = [];
+
+  // 1. Guest Count (10 - 1000)
+  if (requirements.guestCount === null || requirements.guestCount === undefined) {
+    errors.push("guestCount is required for quotation");
+  } else if (requirements.guestCount < 10 || requirements.guestCount > 1000) {
+    errors.push(`guestCount must be between 10 and 1000 (received ${requirements.guestCount})`);
+  }
+
+  // 2. Event Date (Valid calendar date, no defaults)
+  if (!requirements.eventDate) {
+    errors.push("eventDate is required for quotation");
+  } else if (!isValidCalendarDate(requirements.eventDate)) {
+    errors.push(`eventDate '${requirements.eventDate}' is not a valid calendar date in YYYY-MM-DD format`);
+  }
+
+  // 3. Start Time (Valid 24h format, no defaults)
+  if (!requirements.startTime) {
+    errors.push("startTime is required for quotation");
+  } else if (!isValidTime24(requirements.startTime)) {
+    errors.push(`startTime '${requirements.startTime}' must be in 24-hour HH:mm format`);
+  }
+
+  // 4. Duration (1 - 12 hours, no defaults)
+  if (requirements.durationHours === null || requirements.durationHours === undefined) {
+    errors.push("durationHours is required for quotation");
+  } else if (requirements.durationHours < 1 || requirements.durationHours > 12) {
+    errors.push(`durationHours must be between 1 and 12 (received ${requirements.durationHours})`);
+  }
+
+  // 5. Venue Address (min 3 chars)
+  if (!requirements.venueAddress || requirements.venueAddress.trim().length < 3) {
+    errors.push("venueAddress is required (at least 3 characters) to calculate mobilization");
+  }
+
+  // 6. Operational Window Check (Prevent silent midnight wrap)
+  if (requirements.startTime && isValidTime24(requirements.startTime) && requirements.durationHours && requirements.durationHours >= 1 && requirements.durationHours <= 12) {
+    const [startH, startM] = requirements.startTime.split(":").map(Number);
+    const durationMinutes = Math.round(requirements.durationHours * 60);
+    const totalEndMinutes = startH * 60 + startM + durationMinutes;
+
+    if (totalEndMinutes > 24 * 60) {
+      errors.push(
+        `Service duration (${requirements.durationHours}h) starting at ${requirements.startTime} crosses midnight into the next day. Single-day mobile van operations must conclude by 23:59.`
+      );
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+}
+
 /**
  * Deterministically generates a 3-tier event quotation using the Event Booking Concierge engine.
+ * Throws a descriptive validation error if any mandatory business input is absent or invalid.
  */
 export function generateVoiceBookingQuotation(
   requirements: BookingRequirements,
   customerId?: string
 ): EventQuotationRecord {
-  if (!requirements.guestCount || requirements.guestCount < 10) {
-    throw new Error(
-      `Invalid guestCount: ${requirements.guestCount}. Minimum required guest count is 10.`
-    );
-  }
-  if (!requirements.venueAddress || requirements.venueAddress.trim().length === 0) {
-    throw new Error("Venue address is required to calculate mobilization and logistics fees.");
+  const validation = validateQuotationRequirements(requirements);
+  if (!validation.isValid) {
+    throw new Error(`Quotation validation failed: ${validation.errors.join("; ")}`);
   }
 
-  const durationHours = requirements.durationHours || 4;
-  const durationMinutes = Math.max(60, Math.round(durationHours * 60));
+  // Mandatory fields guaranteed by validation
+  const guestCount = requirements.guestCount!;
+  const eventDate = requirements.eventDate!;
+  const startTime = requirements.startTime!;
+  const durationHours = requirements.durationHours!;
+  const venueAddress = requirements.venueAddress!.trim();
 
-  const startTime = requirements.startTime || "10:00";
+  const durationMinutes = Math.round(durationHours * 60);
   const [startH, startM] = startTime.split(":").map(Number);
-  const endTotalMinutes = (startH * 60 + (startM || 0)) + durationMinutes;
-  const endH = Math.floor(endTotalMinutes / 60) % 24;
-  const endM = endTotalMinutes % 60;
+  const totalEndMinutes = startH * 60 + startM + durationMinutes;
+  const endH = Math.min(23, Math.floor(totalEndMinutes / 60));
+  const endM = totalEndMinutes % 60;
   const endTime = `${endH.toString().padStart(2, "0")}:${endM.toString().padStart(2, "0")}`;
 
   const quotation = generateEventQuotationRecord({
     requirements: {
       organization: "Private Event / Voice Booking",
-      guestCount: requirements.guestCount,
+      guestCount,
       durationMinutes,
-      location: requirements.venueAddress.trim(),
+      location: venueAddress,
       city: "Hyderabad",
       eventType: normalizeEventType(requirements.eventType),
-      eventDate: requirements.eventDate || "2026-12-15",
+      eventDate,
       startTime,
       endTime,
       serviceLevel: (requirements.selectedTier as ServiceLevel) || "STANDARD",
