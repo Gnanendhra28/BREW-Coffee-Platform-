@@ -33,7 +33,7 @@ test.describe('BREW Mobile Platform E2E Smoke & Critical Paths', () => {
     await expect(page).toHaveTitle(/BREW/i);
 
     // Verify category filter buttons exist
-    const coffeeCategoryBtn = page.getByRole('button', { name: /Coffee/i });
+    const coffeeCategoryBtn = page.getByRole('tab', { name: /Coffee/i }).or(page.getByRole('button', { name: /Coffee/i }));
     await expect(coffeeCategoryBtn.first()).toBeVisible();
 
     // Verify search input filters items
@@ -55,18 +55,20 @@ test.describe('BREW Mobile Platform E2E Smoke & Critical Paths', () => {
     await expect(addBtn).toBeVisible();
     await addBtn.click();
 
-    // Navigate to /cart
-    await page.goto('/cart');
-    await expect(page.locator('body')).toBeVisible();
+    // Navigate to /cart via header link to preserve client state
+    const cartLink = page.getByRole('link', { name: /View Cart/i }).first();
+    await expect(cartLink).toBeVisible();
+    await cartLink.click();
+    await expect(page).toHaveURL(/\/cart/);
 
     // Verify order summary
     const totalElement = page.locator('text=Total').first();
     await expect(totalElement).toBeVisible({ timeout: 10000 });
 
-    // Select Pay at Outlet option
-    const payAtOutletBtn = page.getByRole('button', { name: /Pay at Outlet/i }).first();
-    if (await payAtOutletBtn.isVisible()) {
-      await payAtOutletBtn.click();
+    // Select Pay at Outlet option via radio role
+    const payAtOutletRadio = page.getByRole('radio', { name: /Pay at Outlet/i }).first();
+    if (await payAtOutletRadio.isVisible()) {
+      await payAtOutletRadio.click();
     }
 
     // Fill customer name
@@ -75,7 +77,7 @@ test.describe('BREW Mobile Platform E2E Smoke & Critical Paths', () => {
       await nameInput.fill('Rohan Sharma');
     }
 
-    // Place order
+    // Place order via primary CTA button
     const placeOrderBtn = page.getByRole('button', { name: /Place Order/i }).first();
     await expect(placeOrderBtn).toBeVisible();
     await placeOrderBtn.click();
@@ -261,7 +263,7 @@ test.describe('BREW Mobile Platform E2E Smoke & Critical Paths', () => {
     await page.goto('/');
 
     // Hamburger button should be visible on mobile
-    const hamburgerBtn = page.getByLabel(/Open Menu/i).or(page.getByLabel(/Close Menu/i)).first();
+    const hamburgerBtn = page.getByLabel(/Open navigation menu/i).or(page.getByLabel(/Close navigation menu/i)).first();
     await expect(hamburgerBtn).toBeVisible();
 
     // Click to open mobile navigation drawer
@@ -271,6 +273,105 @@ test.describe('BREW Mobile Platform E2E Smoke & Critical Paths', () => {
     await expect(page.locator('header').getByRole('link', { name: 'Menu', exact: true })).toBeVisible();
     await expect(page.locator('header').getByRole('link', { name: 'Van Tracker', exact: true })).toBeVisible();
     await expect(page.locator('header').getByRole('link', { name: 'Reviews', exact: true })).toBeVisible();
+  });
+
+  // 10. MULTI-DEVICE RESPONSIVE VIEWPORT SUITE (NO HORIZONTAL OVERFLOW)
+  const viewports = [
+    { name: 'Mobile (Samsung Galaxy)', width: 360, height: 800 },
+    { name: 'Mobile (iPhone 12/13/14)', width: 390, height: 844 },
+    { name: 'Tablet Portrait (iPad)', width: 768, height: 1024 },
+    { name: 'Laptop / Small Desktop', width: 1024, height: 768 },
+    { name: 'MacBook Standard', width: 1440, height: 900 },
+    { name: 'FHD Monitor Desktop', width: 1920, height: 1080 },
+  ];
+
+  for (const vp of viewports) {
+    test(`Responsive Design: /menu and /cart render without horizontal overflow on ${vp.name} (${vp.width}x${vp.height})`, async ({ page }) => {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      
+      // Test /menu
+      await page.goto('/menu');
+      await page.waitForLoadState('domcontentloaded');
+      const menuOverflow = await page.evaluate(() => {
+        return document.documentElement.scrollWidth <= window.innerWidth + 2;
+      });
+      expect(menuOverflow).toBe(true);
+
+      // Test /cart
+      await page.goto('/cart');
+      await page.waitForLoadState('domcontentloaded');
+      const cartOverflow = await page.evaluate(() => {
+        return document.documentElement.scrollWidth <= window.innerWidth + 2;
+      });
+      expect(cartOverflow).toBe(true);
+    });
+  }
+
+  // 11. ACCESSIBILITY (WCAG 2.2 AA) VERIFICATION
+  test('Accessibility: Semantic headings and image alt attributes across core customer routes', async ({ page }) => {
+    const routesToTest = ['/', '/menu', '/cart', '/location', '/reviews'];
+
+    for (const route of routesToTest) {
+      await page.goto(route);
+      await page.waitForLoadState('domcontentloaded');
+
+      // Verify at least one h1 is present
+      const h1Count = await page.locator('h1').count();
+      expect(h1Count, `Route ${route} must have at least one h1 heading`).toBeGreaterThanOrEqual(1);
+
+      // Verify all rendered images have an alt attribute
+      const imagesWithoutAlt = await page.evaluate(() => {
+        const imgs = Array.from(document.querySelectorAll('img'));
+        return imgs.filter((img) => !img.hasAttribute('alt')).length;
+      });
+      expect(imagesWithoutAlt, `Route ${route} has images missing alt attributes`).toBe(0);
+    }
+  });
+
+  test('Accessibility: Interactive tabs and live regions on /menu', async ({ page }) => {
+    await page.goto('/menu');
+    await page.waitForLoadState('domcontentloaded');
+
+    // Tablist exists and is visible on current viewport
+    const tablist = page.locator('[role="tablist"]:visible').first();
+    await expect(tablist).toBeVisible();
+
+    // Live status region exists for cart announcements
+    const liveRegion = page.locator('[role="status"][aria-live="polite"]').first();
+    await expect(liveRegion).toBeAttached();
+
+    // Click an item add button and verify accessible status
+    const addBtn = page.getByLabel(/Add .* to cart/i).first();
+    if (await addBtn.isVisible()) {
+      await addBtn.click();
+      const text = await liveRegion.textContent();
+      expect(text).toContain('Added');
+    }
+  });
+
+  test('Accessibility: Modal dialog attributes and Escape key dismissal on /location', async ({ page }) => {
+    await page.goto('/location');
+    await page.waitForLoadState('domcontentloaded');
+
+    // Fill contact input in request banner
+    const contactInput = page.getByPlaceholder(/Enter your phone or email/i).first();
+    if (await contactInput.isVisible()) {
+      await contactInput.fill('events@iitbhilai.ac.in');
+    }
+
+    // Find and click the button to open the Van Request modal
+    const openModalBtn = page.getByRole('button', { name: /Request Van/i }).first();
+    if (await openModalBtn.isVisible()) {
+      await openModalBtn.click();
+
+      // Check modal role="dialog" and aria-modal="true"
+      const dialog = page.locator('[role="dialog"][aria-modal="true"]');
+      await expect(dialog).toBeVisible();
+
+      // Press Escape key and verify modal closes
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+    }
   });
 
 });

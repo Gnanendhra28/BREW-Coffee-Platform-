@@ -27,6 +27,7 @@ export default function MenuPage() {
   const [activeCategory, setActiveCategory] = useState<CategoryType>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [addedItemIds, setAddedItemIds] = useState<Record<string, boolean>>({});
+  const [a11yAnnouncement, setA11yAnnouncement] = useState("");
   const { addItem, totalItems } = useCart();
 
   // Category counts
@@ -69,14 +70,21 @@ export default function MenuPage() {
       category: item.categoryLabel,
     });
     setAddedItemIds((prev) => ({ ...prev, [item.id]: true }));
+    setA11yAnnouncement(`Added ${item.name} to cart. Total items in cart: ${totalItems + 1}.`);
 
-    // Gentle confetti burst
-    confetti({
-      particleCount: 25,
-      spread: 50,
-      origin: { y: 0.8 },
-      colors: ["#C88C50", "#DFAB6C", "#F4EFE6"],
-    });
+    // Gentle confetti burst respecting user reduced motion preferences
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (!prefersReducedMotion) {
+      confetti({
+        particleCount: 25,
+        spread: 50,
+        origin: { y: 0.8 },
+        colors: ["#C88C50", "#DFAB6C", "#F4EFE6"],
+      });
+    }
 
     setTimeout(() => {
       setAddedItemIds((prev) => {
@@ -146,20 +154,26 @@ export default function MenuPage() {
 
           {/* Search Bar */}
           <div className="relative w-full max-w-md mt-6">
+            <label htmlFor="menu-search-input" className="sr-only">
+              Search menu items by name, description, or tasting notes
+            </label>
             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-[#8C7C70]">
               <Search className="w-4 h-4" />
             </div>
             <input
+              id="menu-search-input"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search coffee, tea, shake, dessert..."
-              className="w-full pl-11 pr-10 py-3 rounded-full bg-[#2A1C14]/70 border border-white/15 text-[#F4EFE6] placeholder-[#7A6A5E] text-xs sm:text-sm focus:outline-none focus:border-[#C88C50] transition-colors backdrop-blur-md shadow-lg"
+              aria-label="Search menu items by name, description, or tasting notes"
+              className="w-full pl-11 pr-10 py-3 rounded-full bg-[#2A1C14]/70 border border-white/15 text-[#F4EFE6] placeholder-[#7A6A5E] text-xs sm:text-sm focus:outline-none focus:border-[#C88C50] focus-visible:ring-2 focus-visible:ring-[#DFAB6C] transition-colors backdrop-blur-md shadow-lg"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute inset-y-0 right-4 flex items-center text-[#8C7C70] hover:text-white"
+                aria-label="Clear search query"
+                className="absolute inset-y-0 right-4 flex items-center text-[#8C7C70] hover:text-white focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none rounded-full"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -167,15 +181,26 @@ export default function MenuPage() {
           </div>
         </div>
 
+        {/* Live Region for Screen-Reader Announcements */}
+        <div className="sr-only" role="status" aria-live="polite">
+          {a11yAnnouncement}
+        </div>
+
         {/* Mobile Horizontal Category Pills (Hidden on lg screens) */}
-        <div className="lg:hidden flex items-center gap-2 overflow-x-auto pb-4 pt-2 no-scrollbar">
+        <div
+          role="tablist"
+          aria-label="Menu category filters"
+          className="lg:hidden flex items-center gap-2 overflow-x-auto pb-4 pt-2 no-scrollbar"
+        >
           {CATEGORIES.map((cat) => {
             const isActive = activeCategory === cat.id;
             return (
               <button
                 key={cat.id}
+                role="tab"
+                aria-selected={isActive}
                 onClick={() => setActiveCategory(cat.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all duration-300 border cursor-pointer ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all duration-300 border cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
                   isActive
                     ? "bg-[#DFAB6C] text-[#1A110B] border-[#DFAB6C] font-semibold shadow-[0_4px_15px_rgba(223,171,108,0.35)]"
                     : "bg-[#251810]/70 text-[#A8988C] border-white/10 hover:border-white/20 hover:text-white"
@@ -210,14 +235,16 @@ export default function MenuPage() {
               </span>
             </div>
 
-            <nav className="space-y-1.5">
+            <nav role="tablist" aria-label="Desktop menu categories" className="space-y-1.5">
               {CATEGORIES.map((cat) => {
                 const isActive = activeCategory === cat.id;
                 return (
                   <button
                     key={cat.id}
+                    role="tab"
+                    aria-selected={isActive}
                     onClick={() => setActiveCategory(cat.id)}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-300 cursor-pointer ${
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-300 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
                       isActive
                         ? "bg-[#DFAB6C] text-[#1A110B] font-semibold shadow-[0_4px_20px_rgba(223,171,108,0.3)] scale-[1.02]"
                         : "text-[#A8988C] hover:text-[#F4EFE6] hover:bg-white/5"

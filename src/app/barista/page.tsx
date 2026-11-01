@@ -362,10 +362,12 @@ export default function BaristaKDSPage() {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center rounded-xl bg-black/40 p-1 border border-white/10 text-xs">
+        <div role="tablist" aria-label="Barista KDS views" className="flex items-center rounded-xl bg-black/40 p-1 border border-white/10 text-xs overflow-x-auto">
           <button
+            role="tab"
+            aria-selected={filterTab === "active"}
             onClick={() => setFilterTab("active")}
-            className={`px-3 sm:px-4 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+            className={`px-3 sm:px-4 py-1.5 rounded-lg font-bold transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
               filterTab === "active"
                 ? "bg-[#DFAB6C] text-[#1A110B] shadow-sm"
                 : "text-[#8C7C70] hover:text-white"
@@ -374,8 +376,10 @@ export default function BaristaKDSPage() {
             Live Tickets ({activeOrders.length})
           </button>
           <button
+            role="tab"
+            aria-selected={filterTab === "all"}
             onClick={() => setFilterTab("all")}
-            className={`px-3 sm:px-4 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+            className={`px-3 sm:px-4 py-1.5 rounded-lg font-bold transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
               filterTab === "all"
                 ? "bg-[#DFAB6C] text-[#1A110B] shadow-sm"
                 : "text-[#8C7C70] hover:text-white"
@@ -384,8 +388,10 @@ export default function BaristaKDSPage() {
             All History ({orders.length})
           </button>
           <button
+            role="tab"
+            aria-selected={filterTab === "curbside"}
             onClick={() => setFilterTab("curbside")}
-            className={`px-3 sm:px-4 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 sm:px-4 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
               filterTab === "curbside"
                 ? "bg-[#DFAB6C] text-[#1A110B] shadow-sm"
                 : "text-[#8C7C70] hover:text-white"
@@ -406,8 +412,10 @@ export default function BaristaKDSPage() {
             )}
           </button>
           <button
+            role="tab"
+            aria-selected={filterTab === "inventory"}
             onClick={() => setFilterTab("inventory")}
-            className={`px-3 sm:px-4 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 sm:px-4 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
               filterTab === "inventory"
                 ? "bg-[#DFAB6C] text-[#1A110B] shadow-sm"
                 : "text-[#8C7C70] hover:text-white"
@@ -423,8 +431,10 @@ export default function BaristaKDSPage() {
             )}
           </button>
           <button
+            role="tab"
+            aria-selected={filterTab === "settings"}
             onClick={() => setFilterTab("settings")}
-            className={`px-3 sm:px-4 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+            className={`px-3 sm:px-4 py-1.5 rounded-lg font-bold transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
               filterTab === "settings"
                 ? "bg-[#DFAB6C] text-[#1A110B] shadow-sm"
                 : "text-[#8C7C70] hover:text-white"
@@ -433,8 +443,10 @@ export default function BaristaKDSPage() {
             Van Location
           </button>
           <button
+            role="tab"
+            aria-selected={filterTab === "dispatch"}
             onClick={() => setFilterTab("dispatch")}
-            className={`px-3 sm:px-4 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 sm:px-4 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
               filterTab === "dispatch"
                 ? "bg-gradient-to-r from-[#DFAB6C] to-[#E5B57A] text-[#1A110B] shadow-sm"
                 : "text-[#DFAB6C] hover:text-white"
@@ -453,7 +465,8 @@ export default function BaristaKDSPage() {
 
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-[#DFAB6C] cursor-pointer"
+            aria-label={soundEnabled ? "Mute audio chimes" : "Enable audio chimes"}
+            className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-[#DFAB6C] cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none"
             title={soundEnabled ? "Mute audio chimes" : "Enable audio chimes"}
           >
             {soundEnabled ? (

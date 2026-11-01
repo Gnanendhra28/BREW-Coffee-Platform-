@@ -90,13 +90,19 @@ export default function CustomerOrderStatusPage({
         vanLocationName: vanLocation.spotName || "Van Window 1",
       });
 
-      // Celebratory confetti
-      confetti({
-        particleCount: 60,
-        spread: 60,
-        origin: { y: 0.6 },
-        colors: ["#34D399", "#DFAB6C", "#F4EFE6"],
-      });
+      // Celebratory confetti if user does not prefer reduced motion
+      const prefersReducedMotion =
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      if (!prefersReducedMotion) {
+        confetti({
+          particleCount: 60,
+          spread: 60,
+          origin: { y: 0.6 },
+          colors: ["#34D399", "#DFAB6C", "#F4EFE6"],
+        });
+      }
     }
   }, [displayOrder.status, displayOrder.orderNumber, displayOrder.id, vanLocation.spotName, hasAlertedReady]);
 
@@ -160,6 +166,10 @@ export default function CustomerOrderStatusPage({
 
           {/* Top Status Header */}
           <div className="text-center pb-6 border-b border-white/10">
+            {/* Live region for status updates */}
+            <div className="sr-only" role="status" aria-live="polite">
+              {`Order token ${displayOrder.orderNumber} is currently ${displayOrder.status}.`}
+            </div>
             <span className="text-xs uppercase tracking-widest font-mono text-[#DFAB6C] font-semibold">
               Live Digital Buzzer
             </span>
@@ -178,6 +188,7 @@ export default function CustomerOrderStatusPage({
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
+                role="alert"
                 className="mt-4 p-4 rounded-2xl bg-emerald-500 text-black font-extrabold flex items-center justify-center gap-2.5 shadow-lg"
               >
                 <CheckCircle2 className="w-6 h-6 stroke-[3]" />

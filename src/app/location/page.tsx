@@ -56,6 +56,17 @@ export default function VanLocationPage() {
   const [selectedTier, setSelectedTier] = useState<string>("Artisanal Signature");
   const [copiedQuote, setCopiedQuote] = useState(false);
 
+  // Close modal on Escape key press
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isModalOpen) {
+        setIsModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isModalOpen]);
+
   const filteredFutureStops = futureStops.filter(
     (item) => activeFilter === "all" || item.state === activeFilter,
   );
@@ -516,7 +527,12 @@ export default function VanLocationPage() {
         {/* ========================================================================= */}
         <AnimatePresence>
           {isModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md overflow-y-auto">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Van Catering and Location Request"
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md overflow-y-auto"
+            >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -526,7 +542,8 @@ export default function VanLocationPage() {
                 {/* Close Button */}
                 <button
                   onClick={() => setIsModalOpen(false)}
-                  className="absolute top-5 right-5 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-[#DFAB6C] flex items-center justify-center transition-colors cursor-pointer"
+                  aria-label="Close dialog"
+                  className="absolute top-5 right-5 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-[#DFAB6C] flex items-center justify-center transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -541,7 +558,7 @@ export default function VanLocationPage() {
                           <Sparkles className="w-3 h-3" />
                           <span>AI Event Concierge · Quoted in &lt;100ms</span>
                         </div>
-                        <h3 className="text-xl sm:text-2xl font-serif font-bold text-white">
+                        <h3 id="van-request-modal-title" className="text-xl sm:text-2xl font-serif font-bold text-white">
                           Catering Quotation for {lastSubmitted?.organization}
                         </h3>
                         <p className="text-xs text-[#8C7C70] mt-0.5">
@@ -766,7 +783,7 @@ export default function VanLocationPage() {
                         <Truck className="w-4 h-4" />
                       </div>
                       <div>
-                        <h3 className="text-lg sm:text-xl font-serif font-bold text-white">
+                        <h3 id="van-request-modal-form-title" className="text-lg sm:text-xl font-serif font-bold text-white">
                           Request Van At Your Location
                         </h3>
                         <p className="text-[11px] text-[#8C7C70]">

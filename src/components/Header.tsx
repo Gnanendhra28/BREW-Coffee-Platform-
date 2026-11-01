@@ -100,20 +100,26 @@ export const Header: React.FC<HeaderProps> = ({
       className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between py-6 px-6 sm:px-10 md:px-14 lg:px-16"
     >
       {/* Left: Brand Logo */}
-      <Link href="/" className="flex items-center gap-2 cursor-pointer group">
+      <Link
+        href="/"
+        className="flex items-center gap-2 cursor-pointer group rounded-lg focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none"
+      >
         <span className="text-2xl sm:text-3xl font-extrabold tracking-[0.2em] text-white transition-opacity group-hover:opacity-90 font-sans">
           BREW
         </span>
       </Link>
 
       {/* Center: Glassmorphism Nav Pill */}
-      <nav className="hidden md:flex items-center gap-1.5 bg-[#2A1C14]/40 backdrop-blur-md rounded-full px-2 py-1.5 shadow-2xl border border-white/10">
+      <nav
+        aria-label="Primary Navigation"
+        className="hidden md:flex items-center gap-1.5 bg-[#2A1C14]/40 backdrop-blur-md rounded-full px-2 py-1.5 shadow-2xl border border-white/10"
+      >
         {navItems.map((item) => (
           <Link
             key={item.label}
             href={item.href}
             onClick={(e) => handleNavClick(e, item.href)}
-            className={`text-xs uppercase tracking-wider font-medium px-4 py-1.5 rounded-full transition-all duration-300 ${
+            className={`text-xs uppercase tracking-wider font-medium px-4 py-1.5 rounded-full transition-all duration-300 focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
               item.active
                 ? "bg-[#3D2619]/80 text-[#F4EFE6] shadow-[0_2px_10px_rgba(0,0,0,0.4)] font-semibold border border-white/5"
                 : "text-[#8C7C70] hover:text-[#F4EFE6] hover:bg-white/5"
@@ -130,9 +136,11 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="relative">
           <button
             onClick={handleProfileClick}
-            aria-label={user ? "User Menu" : "Sign In"}
+            aria-label={user ? (dropdownOpen ? "Close user menu" : "Open user menu") : "Sign in to Brew Club"}
+            aria-expanded={user ? dropdownOpen : undefined}
+            aria-haspopup={user ? "true" : undefined}
             title={user ? (user.displayName || user.email || "Account") : "Sign In"}
-            className={`w-9 h-9 rounded-full flex items-center justify-center border transition-all duration-200 cursor-pointer ${
+            className={`w-9 h-9 rounded-full flex items-center justify-center border transition-all duration-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
               user
                 ? "bg-[#3D2619] border-[#DFAB6C]/60 text-[#DFAB6C] hover:ring-2 hover:ring-[#DFAB6C]/40"
                 : "bg-black/30 text-[#F4EFE6]/80 hover:text-white hover:bg-white/10 border-white/10"
@@ -195,7 +203,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <Link
                     href="/barista"
                     onClick={() => setDropdownOpen(false)}
-                    className="flex items-center justify-between px-2.5 py-1.5 text-xs text-[#EDE4DA] rounded-lg hover:bg-white/10 transition-colors"
+                    className="flex items-center justify-between px-2.5 py-1.5 text-xs text-[#EDE4DA] rounded-lg hover:bg-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none"
                   >
                     <div className="flex items-center gap-2">
                       <ClipboardList className="w-3.5 h-3.5 text-[#DFAB6C]" />
@@ -210,7 +218,7 @@ export const Header: React.FC<HeaderProps> = ({
                     href="/board"
                     target="_blank"
                     onClick={() => setDropdownOpen(false)}
-                    className="flex items-center justify-between px-2.5 py-1.5 text-xs text-[#EDE4DA] rounded-lg hover:bg-white/10 transition-colors"
+                    className="flex items-center justify-between px-2.5 py-1.5 text-xs text-[#EDE4DA] rounded-lg hover:bg-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none"
                   >
                     <div className="flex items-center gap-2">
                       <Tv className="w-3.5 h-3.5 text-emerald-400" />
@@ -222,7 +230,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <Link
                     href="/location"
                     onClick={() => setDropdownOpen(false)}
-                    className="flex items-center justify-between px-2.5 py-1.5 text-xs text-[#EDE4DA] rounded-lg hover:bg-white/10 transition-colors"
+                    className="flex items-center justify-between px-2.5 py-1.5 text-xs text-[#EDE4DA] rounded-lg hover:bg-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none"
                   >
                     <div className="flex items-center gap-2">
                       <MapPin className="w-3.5 h-3.5 text-blue-400" />
@@ -233,7 +241,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <Link
                     href="/reviews"
                     onClick={() => setDropdownOpen(false)}
-                    className="flex items-center justify-between px-2.5 py-1.5 text-xs text-[#EDE4DA] rounded-lg hover:bg-white/10 transition-colors"
+                    className="flex items-center justify-between px-2.5 py-1.5 text-xs text-[#EDE4DA] rounded-lg hover:bg-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none"
                   >
                     <div className="flex items-center gap-2">
                       <Star className="w-3.5 h-3.5 text-[#DFAB6C]" />
@@ -260,7 +268,7 @@ export const Header: React.FC<HeaderProps> = ({
                     setDropdownOpen(false);
                     await signOutUser();
                   }}
-                  className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-black/40 hover:bg-red-500/20 text-xs font-semibold text-red-400 border border-red-500/20 hover:border-red-500/40 transition-all cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-black/40 hover:bg-red-500/20 text-xs font-semibold text-red-400 border border-red-500/20 hover:border-red-500/40 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:outline-none"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span>Sign Out</span>
@@ -273,8 +281,12 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Shopping cart icon -> Navigates to /cart */}
         <Link
           href="/cart"
-          aria-label="View Cart"
-          className={`relative w-9 h-9 rounded-full flex items-center justify-center border transition-all duration-200 cursor-pointer ${
+          aria-label={
+            displayCartCount > 0
+              ? `View Cart, ${displayCartCount} ${displayCartCount === 1 ? "item" : "items"}`
+              : "View Cart, 0 items"
+          }
+          className={`relative w-9 h-9 rounded-full flex items-center justify-center border transition-all duration-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
             isCartPage
               ? "bg-[#DFAB6C] text-[#1A110B] border-[#DFAB6C] shadow-[0_0_15px_rgba(223,171,108,0.4)]"
               : "bg-black/30 text-[#F4EFE6]/80 hover:text-white hover:bg-white/10 border-white/10"
@@ -282,7 +294,10 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <ShoppingBag className="w-4 h-4 stroke-[1.75]" />
           {displayCartCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#DFAB6C] text-black font-bold text-[10px] flex items-center justify-center animate-pulse">
+            <span
+              className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#DFAB6C] text-black font-bold text-[10px] flex items-center justify-center animate-pulse"
+              aria-hidden="true"
+            >
               {displayCartCount}
             </span>
           )}
@@ -297,7 +312,7 @@ export const Header: React.FC<HeaderProps> = ({
               router.push("/menu");
             }
           }}
-          className="bg-[#F4EFE6] text-[#1A110B] rounded-full px-5 sm:px-6 py-2 text-xs sm:text-sm font-semibold tracking-wide hover:bg-white hover:shadow-[0_0_20px_rgba(244,239,230,0.3)] transition-all duration-300 transform active:scale-95 cursor-pointer"
+          className="bg-[#F4EFE6] text-[#1A110B] rounded-full px-5 sm:px-6 py-2 text-xs sm:text-sm font-semibold tracking-wide hover:bg-white hover:shadow-[0_0_20px_rgba(244,239,230,0.3)] transition-all duration-300 transform active:scale-95 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none"
         >
           {displayCartCount > 0 ? "View Cart" : "Order Now"}
         </button>
@@ -305,8 +320,10 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Mobile Hamburger Toggle */}
         <button
           onClick={() => setMobileMenuOpen((prev) => !prev)}
-          aria-label={mobileMenuOpen ? "Close Menu" : "Open Menu"}
-          className="md:hidden w-9 h-9 rounded-full flex items-center justify-center bg-black/30 text-[#F4EFE6]/90 hover:text-white hover:bg-white/10 border border-white/10 transition-colors cursor-pointer"
+          aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+          aria-expanded={mobileMenuOpen}
+          aria-controls="mobile-nav-drawer"
+          className="md:hidden w-9 h-9 rounded-full flex items-center justify-center bg-black/30 text-[#F4EFE6]/90 hover:text-white hover:bg-white/10 border border-white/10 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none"
         >
           {mobileMenuOpen ? (
             <X className="w-4 h-4" />
@@ -320,6 +337,9 @@ export const Header: React.FC<HeaderProps> = ({
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div
+            id="mobile-nav-drawer"
+            role="dialog"
+            aria-label="Mobile Navigation"
             initial={{ opacity: 0, y: -10, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.98 }}
@@ -334,7 +354,7 @@ export const Header: React.FC<HeaderProps> = ({
                   setMobileMenuOpen(false);
                   handleNavClick(e, item.href);
                 }}
-                className={`px-4 py-2.5 rounded-xl font-medium transition-colors ${
+                className={`px-4 py-2.5 rounded-xl font-medium transition-colors focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
                   item.active
                     ? "bg-[#3D2619] text-[#DFAB6C] font-semibold border border-[#DFAB6C]/30"
                     : "text-[#EDE4DA] hover:bg-white/10"

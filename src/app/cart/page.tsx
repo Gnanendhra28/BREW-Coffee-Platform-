@@ -131,12 +131,19 @@ export default function CartPage() {
       itemCount: totalItems,
     });
 
-    confetti({
-      particleCount: 80,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: ["#DFAB6C", "#C88C50", "#F4EFE6", "#FFFFFF"],
-    });
+    // Check prefers-reduced-motion before firing celebratory confetti
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (!prefersReducedMotion) {
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ["#DFAB6C", "#C88C50", "#F4EFE6", "#FFFFFF"],
+      });
+    }
 
     clearCart();
   };
@@ -460,18 +467,21 @@ export default function CartPage() {
                       <div className="flex items-center rounded-xl bg-black/50 border border-white/10 p-1">
                         <button
                           onClick={() => updateQuantity(item.id, -1)}
-                          aria-label="Decrease quantity"
-                          className="w-8 h-8 rounded-lg flex items-center justify-center text-[#8C7C70] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                          aria-label={`Decrease quantity of ${item.name}`}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-[#8C7C70] hover:text-white hover:bg-white/10 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
-                        <span className="w-9 text-center font-mono font-bold text-sm text-white">
+                        <span
+                          className="w-9 text-center font-mono font-bold text-sm text-white"
+                          aria-label={`Current quantity ${item.quantity}`}
+                        >
                           {item.quantity}
                         </span>
                         <button
                           onClick={() => updateQuantity(item.id, 1)}
-                          aria-label="Increase quantity"
-                          className="w-8 h-8 rounded-lg flex items-center justify-center text-[#8C7C70] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                          aria-label={`Increase quantity of ${item.name}`}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-[#8C7C70] hover:text-white hover:bg-white/10 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
@@ -488,7 +498,7 @@ export default function CartPage() {
                       <button
                         onClick={() => removeItem(item.id)}
                         aria-label={`Remove ${item.name}`}
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-[#8C7C70] hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-[#8C7C70] hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:outline-none"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -499,14 +509,20 @@ export default function CartPage() {
 
               {/* Pickup Mode (Walk-up Window vs Curbside) */}
               <div className="p-5 rounded-3xl bg-[#24170F]/60 backdrop-blur-md border border-white/10 mt-6">
-                <label className="block text-xs uppercase tracking-wider font-semibold text-[#8C7C70] mb-3">
+                <span id="pickup-mode-label" className="block text-xs uppercase tracking-wider font-semibold text-[#8C7C70] mb-3">
                   How would you like to collect your brew?
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                </span>
+                <div
+                  role="radiogroup"
+                  aria-labelledby="pickup-mode-label"
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3"
+                >
                   <button
                     type="button"
+                    role="radio"
+                    aria-checked={pickupType === "walkup"}
                     onClick={() => setPickupType("walkup")}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
                       pickupType === "walkup"
                         ? "bg-[#3D2619] border-[#DFAB6C] text-white shadow-md"
                         : "bg-black/30 border-white/5 text-[#8C7C70] hover:text-white"
@@ -521,8 +537,10 @@ export default function CartPage() {
 
                   <button
                     type="button"
+                    role="radio"
+                    aria-checked={pickupType === "curbside"}
                     onClick={() => setPickupType("curbside")}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
                       pickupType === "curbside"
                         ? "bg-[#3D2619] border-[#DFAB6C] text-white shadow-md"
                         : "bg-black/30 border-white/5 text-[#8C7C70] hover:text-white"
@@ -728,18 +746,20 @@ export default function CartPage() {
                         value={promoCode}
                         onChange={(e) => setPromoCode(e.target.value)}
                         placeholder="Promo code (e.g. BREW10)"
-                        className="w-full pl-9 pr-3 py-2 bg-black/40 rounded-xl border border-white/10 text-xs text-white placeholder-[#8C7C70]/60 focus:outline-none focus:border-[#DFAB6C] uppercase font-mono"
+                        aria-label="Enter promotional discount code"
+                        className="w-full pl-9 pr-3 py-2 bg-black/40 rounded-xl border border-white/10 text-xs text-white placeholder-[#8C7C70]/60 focus:outline-none focus:border-[#DFAB6C] focus-visible:ring-2 focus-visible:ring-[#DFAB6C] uppercase font-mono"
                       />
                     </div>
                     <button
                       type="submit"
-                      className="px-4 py-2 bg-white/10 hover:bg-white/20 text-xs font-semibold rounded-xl text-white transition-colors cursor-pointer"
+                      className="px-4 py-2 bg-white/10 hover:bg-white/20 text-xs font-semibold rounded-xl text-white transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none"
                     >
                       Apply
                     </button>
                   </div>
                   {promoMessage && (
                     <p
+                      role={promoMessage.error ? "alert" : "status"}
                       className={`text-[11px] mt-1.5 ${
                         promoMessage.error ? "text-red-400" : "text-emerald-400"
                       }`}
@@ -762,14 +782,20 @@ export default function CartPage() {
 
                 {/* Payment Method Selector */}
                 <div className="mb-6 space-y-2">
-                  <span className="text-xs uppercase tracking-wider font-semibold text-[#8C7C70] block">
+                  <span id="payment-method-label" className="text-xs uppercase tracking-wider font-semibold text-[#8C7C70] block">
                     Select Payment Method
                   </span>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div
+                    role="radiogroup"
+                    aria-labelledby="payment-method-label"
+                    className="grid grid-cols-2 gap-2"
+                  >
                     <button
                       type="button"
+                      role="radio"
+                      aria-checked={paymentMode === "outlet"}
                       onClick={() => setPaymentMode("outlet")}
-                      className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between gap-1 cursor-pointer ${
+                      className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between gap-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
                         paymentMode === "outlet"
                           ? "bg-[#DFAB6C]/15 border-[#DFAB6C] text-white shadow-md"
                           : "bg-black/30 border-white/10 text-[#8C7C70] hover:text-white hover:bg-white/5"
@@ -787,8 +813,10 @@ export default function CartPage() {
 
                     <button
                       type="button"
+                      role="radio"
+                      aria-checked={paymentMode === "online"}
                       onClick={() => setPaymentMode("online")}
-                      className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between gap-1 cursor-pointer ${
+                      className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between gap-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#DFAB6C] focus-visible:outline-none ${
                         paymentMode === "online"
                           ? "bg-[#DFAB6C]/15 border-[#DFAB6C] text-white shadow-md"
                           : "bg-black/30 border-white/10 text-[#8C7C70] hover:text-white hover:bg-white/5"
@@ -814,7 +842,7 @@ export default function CartPage() {
 
                 {/* Error message */}
                 {paymentError && (
-                  <p className="p-3 mb-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs text-center">
+                  <p role="alert" className="p-3 mb-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs text-center">
                     {paymentError}
                   </p>
                 )}
