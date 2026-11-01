@@ -21,6 +21,7 @@
     "test:p53": "node scripts/verify-phase5-3-demo-hardening.mjs",
     "test:p531": "node scripts/verify-phase5-3-1-security-boundaries.mjs",
     "test:p61": "npx tsx scripts/verify-phase6-1-communication.ts",
+    "test:p62": "npx tsx scripts/verify-phase6-2-voice-booking.ts",
     "test:e2e": "playwright test",
     "deploy:gcp": "./scripts/deploy-gcp.sh"
   },
