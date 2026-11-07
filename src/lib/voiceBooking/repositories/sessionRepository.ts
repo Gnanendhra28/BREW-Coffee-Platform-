@@ -116,6 +116,8 @@ class IndexedSessionMap extends Map<string, VoiceBookingSession> {
 }
 
 export class InMemoryVoiceSessionRepository implements VoiceSessionRepository {
+  readonly isDurable: boolean = false;
+  readonly storageType = "memory" as const;
   private phoneIndex: Map<string, Set<string>> = new Map();
   private sessions: Map<string, VoiceBookingSession>;
   private officialVanRequests: Map<string, Record<string, unknown>> = new Map();

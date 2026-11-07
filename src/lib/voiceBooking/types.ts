@@ -386,6 +386,8 @@ export interface VoiceSessionLookupOptions {
 }
 
 export interface VoiceSessionRepository {
+  readonly isDurable?: boolean;
+  readonly storageType?: "firestore" | "memory" | string;
   getById(id: string): Promise<VoiceBookingSession | null>;
   save(session: VoiceBookingSession, expectedRevision?: number): Promise<void>;
   saveWithOutbox(

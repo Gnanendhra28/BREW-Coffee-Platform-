@@ -30,7 +30,7 @@ import { generateEventQuotation, type EventQuotation } from "../../lib/smartAgen
 
 export default function VanLocationPage() {
   const { vanLocation, futureStops } = useVan();
-  const BUSINESS_EMAIL = "mattag@iitbhilai.ac.in";
+  const BUSINESS_EMAIL = process.env.NEXT_PUBLIC_BUSINESS_EMAIL || "catering@brewcoffee.in";
 
   const [notifyContact, setNotifyContact] = useState("");
   const [activeFilter, setActiveFilter] = useState<

@@ -59,12 +59,13 @@ export async function POST(req: NextRequest) {
 
     const repository = getVoiceSessionRepository();
     const id = sessionId.trim();
+    const isProd = process.env.NODE_ENV === "production";
     const effectiveId =
-      id === "demo" || id === "demo-pending" || id === "vbs_demo_awaiting_approval"
+      !isProd && (id === "demo" || id === "demo-pending" || id === "vbs_demo_awaiting_approval")
         ? "vbs_demo_pending_review"
-        : id === "demo-approved"
+        : !isProd && id === "demo-approved"
         ? "vbs_demo_approved_booking"
-        : id === "demo-rejected" || id === "demo-declined"
+        : !isProd && (id === "demo-rejected" || id === "demo-declined")
         ? "vbs_demo_declined_booking"
         : id;
 
@@ -72,6 +73,7 @@ export async function POST(req: NextRequest) {
 
     if (
       !session &&
+      !isProd &&
       (effectiveId.startsWith("vbs_demo_") || effectiveId.includes("demo")) &&
       isVoicePrototypeMode()
     ) {

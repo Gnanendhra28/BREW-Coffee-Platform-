@@ -48,7 +48,6 @@ import {
   MockExtractionProvider,
 } from "./providers/extractionProvider";
 import { InMemoryVoiceSessionRepository } from "./repositories/sessionRepository";
-import { isVoicePrototypeMode } from "./prototypeConfig";
 import { FirestoreVoiceSessionRepository } from "./repositories/firestoreSessionRepository";
 import { computeOfficialVanRequestId } from "./vanRequestBridge";
 import { createOutboxDeliveriesForTransition } from "../communication/outbox/outboxModel";
@@ -88,41 +87,59 @@ let activeRepositoryOverride: VoiceSessionRepository | null = null;
  * In genuine production environments, setting an in-memory repository is strictly rejected.
  */
 export function setVoiceSessionRepository(repo: VoiceSessionRepository | null): void {
-  if (
-    process.env.NODE_ENV === "production" &&
-    repo &&
-    repo.constructor.name === "InMemoryVoiceSessionRepository"
-  ) {
-    throw new Error(
-      "Security violation: In-memory repository override is strictly prohibited in production environment."
-    );
+  if (process.env.NODE_ENV === "production" && repo) {
+    if (
+      repo.isDurable !== true ||
+      repo.storageType !== "firestore" ||
+      repo.constructor.name === "InMemoryVoiceSessionRepository" ||
+      !(repo instanceof FirestoreVoiceSessionRepository)
+    ) {
+      throw new Error(
+        "Security violation: In-memory repository override is strictly prohibited in production environment."
+      );
+    }
   }
   activeRepositoryOverride = repo;
 }
 
 /**
  * Returns the authoritative VoiceSessionRepository based on runtime configuration.
- * - In zero-cost prototype mode or local dev, returns defaultSessionRepository.
- * - In production integration or when VOICE_BOOKING_STORAGE === "firestore", returns FirestoreVoiceSessionRepository.
- * - In local test / development environments without firestore override, returns defaultSessionRepository.
- * - Throws fail-closed error if Firestore credentials are missing in production.
+ * - In production (`NODE_ENV === 'production'`), Cloud Firestore is strictly required to guarantee
+ *   multi-instance persistence, survivability across container restarts, and atomic concurrency.
+ * - In-memory fallback is prohibited in production.
+ * - In non-production testing or when VOICE_BOOKING_STORAGE === "firestore", selects FirestoreVoiceSessionRepository.
+ * - In local dev/test without explicit firestore storage, returns defaultSessionRepository.
  */
 export function getVoiceSessionRepository(): VoiceSessionRepository {
   if (activeRepositoryOverride) {
+    if (process.env.NODE_ENV === "production") {
+      if (
+        activeRepositoryOverride.isDurable !== true ||
+        activeRepositoryOverride.storageType !== "firestore" ||
+        activeRepositoryOverride.constructor.name === "InMemoryVoiceSessionRepository" ||
+        !(activeRepositoryOverride instanceof FirestoreVoiceSessionRepository)
+      ) {
+        throw new Error(
+          "Security violation: In-memory repository override is strictly prohibited in production environment."
+        );
+      }
+    }
     return activeRepositoryOverride;
   }
 
-  // Zero-cost prototype mode: use singleton in-memory repository without paid/external requirements
-  if (isVoicePrototypeMode()) {
-    return defaultSessionRepository;
-  }
+  const isProd = process.env.NODE_ENV === "production";
+  const storageEnv = process.env.VOICE_BOOKING_STORAGE?.trim().toLowerCase();
 
-  if (process.env.NODE_ENV === "production") {
+  if (isProd) {
+    if (storageEnv === "memory") {
+      throw new Error(
+        "Production configuration error: VOICE_BOOKING_STORAGE cannot be set to 'memory' in production. Distributed Cloud Firestore is strictly required."
+      );
+    }
     return new FirestoreVoiceSessionRepository();
   }
 
-  const forceFirestore = process.env.VOICE_BOOKING_STORAGE === "firestore";
-  if (forceFirestore) {
+  if (storageEnv === "firestore") {
     return new FirestoreVoiceSessionRepository();
   }
 

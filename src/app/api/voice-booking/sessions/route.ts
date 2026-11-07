@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 
     if (typeof repository.getAllSessions === "function") {
       let all = await repository.getAllSessions();
-      if (all.length === 0 && isVoicePrototypeMode()) {
+      if (all.length === 0 && isVoicePrototypeMode() && process.env.NODE_ENV !== "production") {
         await ensureDemoSessions(repository);
         all = await repository.getAllSessions();
       }

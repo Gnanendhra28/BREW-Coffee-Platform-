@@ -15,10 +15,14 @@ export type RepositoryStorageMode = "firestore" | "memory" | "auto";
 export function getConsentRepository(
   mode: RepositoryStorageMode = "auto"
 ): ConsentRepository {
+  const isProd = process.env.NODE_ENV === "production";
   if (mode === "memory") {
+    if (isProd) {
+      throw new Error("InMemoryConsentRepository is strictly prohibited in production environment.");
+    }
     return new InMemoryConsentRepository();
   }
-  if (mode === "firestore") {
+  if (mode === "firestore" || isProd) {
     return new FirestoreConsentRepository();
   }
   return getAdminFirestore()
@@ -29,10 +33,14 @@ export function getConsentRepository(
 export function getDndRepository(
   mode: RepositoryStorageMode = "auto"
 ): DndRepository {
+  const isProd = process.env.NODE_ENV === "production";
   if (mode === "memory") {
+    if (isProd) {
+      throw new Error("InMemoryDndRepository is strictly prohibited in production environment.");
+    }
     return new InMemoryDndRepository();
   }
-  if (mode === "firestore") {
+  if (mode === "firestore" || isProd) {
     return new FirestoreDndRepository();
   }
   return getAdminFirestore()

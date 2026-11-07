@@ -9,6 +9,8 @@ services:
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
+      - key: NODE_VERSION
+        value: "20.18.0"
       - key: NODE_ENV
         value: production
       - key: PORT
@@ -33,8 +35,14 @@ services:
         sync: false
       - key: FLEET_ADMIN_PIN
         sync: false
+      - key: OUTBOX_WORKER_SECRET
+        generateValue: true
       - key: FIREBASE_PROJECT_ID
         value: "brew-2621e"
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
       - key: FIREBASE_SERVICE_ACCOUNT
         sync: false
       - key: UPSTASH_REDIS_REST_URL

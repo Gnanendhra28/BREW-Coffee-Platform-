@@ -77,6 +77,8 @@
     "test:p6": "npx tsx scripts/verify-phase-p6-customer-booking-experience.ts",
     "test:p7": "npx tsx scripts/verify-phase-p7-e2e-quality-assurance.ts",
     "test:p8": "npx tsx scripts/verify-phase-p8-demo-readiness.ts",
+    "test:prod-persistence": "npx tsx scripts/verify-production-persistence-and-render.ts",
+    "test:acceptance-gate": "npx tsx scripts/verify-acceptance-gate.ts",
     "start:voice-bridge": "npx tsx src/server/voiceBridgeServer.ts",
     "test:e2e": "playwright test",
     "deploy:gcp": "./scripts/deploy-gcp.sh"

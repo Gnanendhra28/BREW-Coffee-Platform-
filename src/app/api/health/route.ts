@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { getAgentCacheStats } from "../../../lib/agentCache";
 import { getAdminFirestore } from "../../../lib/firebaseAdmin";
 import { getRealtimeServerSnapshot } from "../../../lib/serverRealtimeStore";
+import { validateProductionEnvironment, isProductionEnvironment } from "../../../lib/envValidation";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,9 @@ export async function GET() {
   const startTime = Date.now();
 
   try {
+    const isProd = isProductionEnvironment();
+    const envValidation = validateProductionEnvironment();
+
     // 1. Process & Memory Metrics
     const memory = process.memoryUsage();
     const cacheStats = getAgentCacheStats();
@@ -143,10 +147,25 @@ export async function GET() {
         pid: process.pid,
         nodeVersion: process.version,
       },
+      configuration: {
+        status: envValidation.valid ? "healthy" : "unhealthy",
+        isProduction: isProd,
+        ...(envValidation.missingVariables.length > 0
+          ? { missingVariables: envValidation.missingVariables }
+          : {}),
+        ...(envValidation.invalidVariables.length > 0
+          ? { invalidVariables: envValidation.invalidVariables }
+          : {}),
+      },
     };
 
+    const isProduction = isProductionEnvironment();
     const hasOutage =
-      checks.firestore.status === "unhealthy" || checks.redis.status === "unhealthy";
+      checks.firestore.status === "unhealthy" ||
+      checks.redis.status === "unhealthy" ||
+      (isProduction && checks.firestore.status !== "healthy") ||
+      (isProduction && !envValidation.valid);
+
     const isHealthy = !hasOutage;
     const latencyMs = Date.now() - startTime;
 

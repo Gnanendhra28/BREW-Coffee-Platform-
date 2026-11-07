@@ -26,7 +26,18 @@ import { isValidCalendarDate } from "../../../lib/voiceBooking/schemas";
 import { VoiceBookingSession } from "../../../lib/voiceBooking/types";
 import { getVoiceSessionRepository } from "../../../lib/voiceBooking/conversationEngine";
 
-const BUSINESS_EMAIL = process.env.BUSINESS_EMAIL || "mattag@iitbhilai.ac.in";
+function getBusinessEmail(): string {
+  const email = (
+    process.env.BUSINESS_EMAIL ||
+    process.env.NEXT_PUBLIC_BUSINESS_EMAIL ||
+    (process.env.NODE_ENV === "production" ? "" : "catering@brewcoffee.in")
+  ).trim();
+
+  if (process.env.NODE_ENV === "production" && (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+    throw new Error("[SECURITY CONFIGURATION] Valid BUSINESS_EMAIL is strictly required in production.");
+  }
+  return email || "catering@brewcoffee.in";
+}
 const IDEMPOTENCY_FILE_PATH = path.join(process.cwd(), "src/data/idempotency_records.json");
 
 // Idempotency Record Storage with 10-minute sliding window
@@ -56,51 +67,95 @@ function cleanupIdempotencyStore() {
   }
 }
 
-function readDurableIdempotency(key: string): IdempotencyRecord | undefined {
+const IDEMPOTENCY_COLLECTION = "idempotency_records";
+
+async function readDurableIdempotency(key: string): Promise<IdempotencyRecord | undefined> {
   const inMemory = idempotencyStore.get(key);
   if (inMemory) return inMemory;
 
-  try {
-    if (fs.existsSync(IDEMPOTENCY_FILE_PATH)) {
-      const data = JSON.parse(fs.readFileSync(IDEMPOTENCY_FILE_PATH, "utf-8")) as Record<string, IdempotencyRecord>;
-      if (data && data[key]) {
-        idempotencyStore.set(key, data[key]);
-        return data[key];
+  // 1. Check Cloud Firestore if available
+  const adminDb = getAdminFirestore();
+  if (adminDb) {
+    try {
+      const snap = await adminDb.collection(IDEMPOTENCY_COLLECTION).doc(key).get();
+      if (snap.exists) {
+        const record = snap.data() as IdempotencyRecord;
+        idempotencyStore.set(key, record);
+        return record;
       }
-    }
-  } catch {}
+    } catch {}
+  }
+
+  // 2. Non-production fallback to local file
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      if (fs.existsSync(IDEMPOTENCY_FILE_PATH)) {
+        const data = JSON.parse(fs.readFileSync(IDEMPOTENCY_FILE_PATH, "utf-8")) as Record<string, IdempotencyRecord>;
+        if (data && data[key]) {
+          idempotencyStore.set(key, data[key]);
+          return data[key];
+        }
+      }
+    } catch {}
+  }
+
   return undefined;
 }
 
-function writeDurableIdempotency(key: string, record: IdempotencyRecord) {
+async function writeDurableIdempotency(key: string, record: IdempotencyRecord): Promise<void> {
   idempotencyStore.set(key, record);
-  try {
-    const dir = path.dirname(IDEMPOTENCY_FILE_PATH);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    let data: Record<string, IdempotencyRecord> = {};
-    if (fs.existsSync(IDEMPOTENCY_FILE_PATH)) {
-      try {
-        data = JSON.parse(fs.readFileSync(IDEMPOTENCY_FILE_PATH, "utf-8"));
-      } catch {}
-    }
-    data[key] = record;
-    fs.writeFileSync(IDEMPOTENCY_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
-  } catch {}
+
+  // 1. Cloud Firestore persistence
+  const adminDb = getAdminFirestore();
+  if (adminDb) {
+    try {
+      await adminDb.collection(IDEMPOTENCY_COLLECTION).doc(key).set(record);
+    } catch {}
+  }
+
+  // 2. Non-production fallback to local file
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      const dir = path.dirname(IDEMPOTENCY_FILE_PATH);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      let data: Record<string, IdempotencyRecord> = {};
+      if (fs.existsSync(IDEMPOTENCY_FILE_PATH)) {
+        try {
+          data = JSON.parse(fs.readFileSync(IDEMPOTENCY_FILE_PATH, "utf-8"));
+        } catch {}
+      }
+      data[key] = record;
+      fs.writeFileSync(IDEMPOTENCY_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
+    } catch {}
+  }
 }
 
-function removeDurableIdempotency(key: string) {
+async function removeDurableIdempotency(key: string): Promise<void> {
   idempotencyStore.delete(key);
-  try {
-    if (fs.existsSync(IDEMPOTENCY_FILE_PATH)) {
-      const data = JSON.parse(fs.readFileSync(IDEMPOTENCY_FILE_PATH, "utf-8")) as Record<string, IdempotencyRecord>;
-      delete data[key];
-      fs.writeFileSync(IDEMPOTENCY_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
-    }
-  } catch {}
+
+  // 1. Cloud Firestore deletion
+  const adminDb = getAdminFirestore();
+  if (adminDb) {
+    try {
+      await adminDb.collection(IDEMPOTENCY_COLLECTION).doc(key).delete();
+    } catch {}
+  }
+
+  // 2. Non-production fallback to local file
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      if (fs.existsSync(IDEMPOTENCY_FILE_PATH)) {
+        const data = JSON.parse(fs.readFileSync(IDEMPOTENCY_FILE_PATH, "utf-8")) as Record<string, IdempotencyRecord>;
+        delete data[key];
+        fs.writeFileSync(IDEMPOTENCY_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
+      }
+    } catch {}
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const BUSINESS_EMAIL = getBusinessEmail();
     // 1. Stream-bounded body read: enforces strict 100KB limit
     const readResult = await readBoundedJson(req);
     if (!readResult.ok || readResult.response) {
@@ -204,7 +259,7 @@ export async function POST(req: NextRequest) {
       ? `client_${clientProvidedKey}`
       : `hash_${payloadFingerprint}`;
 
-    const existingIdempotency = readDurableIdempotency(effectiveIdempotencyKey);
+    const existingIdempotency = await readDurableIdempotency(effectiveIdempotencyKey);
     if (existingIdempotency) {
       // NEVER trust idempotency key alone: verify customer and payload fingerprint match
       if (existingIdempotency.fingerprint !== payloadFingerprint) {
@@ -237,7 +292,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Mark key as pending to prevent concurrent duplicate race conditions
-    writeDurableIdempotency(effectiveIdempotencyKey, {
+    await writeDurableIdempotency(effectiveIdempotencyKey, {
       timestamp: Date.now(),
       status: "pending",
       fingerprint: payloadFingerprint,
@@ -747,7 +802,7 @@ Call the customer directly at ${maskedContact}.
             },
             idempotentReplay: true,
           };
-          writeDurableIdempotency(effectiveIdempotencyKey, {
+          await writeDurableIdempotency(effectiveIdempotencyKey, {
             timestamp: Date.now(),
             status: "completed",
             fingerprint: payloadFingerprint,
@@ -770,7 +825,7 @@ Call the customer directly at ${maskedContact}.
       process.env.NODE_ENV === "production" && process.env.ALLOW_LOCAL_FALLBACK !== "true";
 
     if ((isStrictPersistence || simulateDbFailure) && !firestorePersisted) {
-      removeDurableIdempotency(effectiveIdempotencyKey);
+      await removeDurableIdempotency(effectiveIdempotencyKey);
       return NextResponse.json(
         {
           error:
@@ -782,7 +837,7 @@ Call the customer directly at ${maskedContact}.
     }
 
     // Non-production safety net: Persist locally for dev/test runner if filesystem is writable
-    if (!firestorePersisted) {
+    if (!firestorePersisted && process.env.NODE_ENV !== "production") {
       if (initialVoiceSession) {
         try {
           const sessionRepo = getVoiceSessionRepository();
@@ -834,7 +889,7 @@ Call the customer directly at ${maskedContact}.
     };
 
     // Store in durable idempotency cache
-    writeDurableIdempotency(effectiveIdempotencyKey, {
+    await writeDurableIdempotency(effectiveIdempotencyKey, {
       timestamp: Date.now(),
       status: "completed",
       response: responsePayload,
@@ -914,10 +969,12 @@ export async function GET(req: NextRequest) {
     }
 
     // Non-production fallback to local file
-    const filePath = path.join(process.cwd(), "src/data/van_requests.json");
-    if (fs.existsSync(filePath)) {
-      const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      return NextResponse.json(data);
+    if (process.env.NODE_ENV !== "production") {
+      const filePath = path.join(process.cwd(), "src/data/van_requests.json");
+      if (fs.existsSync(filePath)) {
+        const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+        return NextResponse.json(data);
+      }
     }
 
     return NextResponse.json([]);

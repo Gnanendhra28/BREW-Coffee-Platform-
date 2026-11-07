@@ -273,10 +273,11 @@ export function createDemoVoiceBookingSessions(): VoiceBookingSession[] {
 
 /**
  * Ensures demo sessions exist in the repository if currently empty.
- * Strictly active in prototype mode.
+ * Strictly active in local development/prototype mode.
+ * PROHIBITED IN PRODUCTION: Will never seed demo data when NODE_ENV is production.
  */
 export async function ensureDemoSessions(repository: VoiceSessionRepository): Promise<VoiceBookingSession[]> {
-  if (!isVoicePrototypeMode()) {
+  if (process.env.NODE_ENV === "production" || !isVoicePrototypeMode()) {
     return [];
   }
 

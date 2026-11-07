@@ -201,6 +201,8 @@ export interface FirestoreVoiceSessionRepositoryOptions {
  * Provides distributed multi-instance durability and atomic transactions.
  */
 export class FirestoreVoiceSessionRepository implements VoiceSessionRepository {
+  readonly isDurable: boolean = true;
+  readonly storageType = "firestore" as const;
   private injectedDb?: Firestore | null;
   private postCommitSyncFn: PostCommitSlotSyncFn;
 

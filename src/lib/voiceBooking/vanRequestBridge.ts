@@ -300,7 +300,7 @@ export function createVanRequestRecordFromSession(
   const businessEmail = (
     process.env.BUSINESS_EMAIL ||
     process.env.NEXT_PUBLIC_BUSINESS_EMAIL ||
-    (isVoicePrototypeMode() ? "catering@brewcoffee.in" : "")
+    (isVoicePrototypeMode() && process.env.NODE_ENV !== "production" ? "catering@brewcoffee.in" : "")
   ).trim();
   if (!businessEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(businessEmail)) {
     throw new InvalidOfficialBookingBridgeDataError(
