@@ -313,7 +313,7 @@ test.describe('BREW Mobile Platform E2E Smoke & Critical Paths', () => {
 
     for (const route of routesToTest) {
       await page.goto(route);
-      await page.waitForLoadState('domcontentloaded');
+      await page.locator('h1').first().waitFor({ timeout: 10000 });
 
       // Verify at least one h1 is present
       const h1Count = await page.locator('h1').count();

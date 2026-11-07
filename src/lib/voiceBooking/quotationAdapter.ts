@@ -63,6 +63,11 @@ export function validateQuotationRequirements(
     errors.push("eventDate is required for quotation");
   } else if (!isValidCalendarDate(requirements.eventDate)) {
     errors.push(`eventDate '${requirements.eventDate}' is not a valid calendar date in YYYY-MM-DD format`);
+  } else {
+    const todayIso = new Date().toISOString().split("T")[0];
+    if (requirements.eventDate < todayIso) {
+      errors.push(`eventDate '${requirements.eventDate}' cannot be in the past`);
+    }
   }
 
   // 3. Start Time (Valid 24h format, no defaults)
@@ -147,6 +152,17 @@ export function generateVoiceBookingQuotation(
     customerId: customerId || "voice-booking-session",
   });
 
+  // Bidirectional tier reflection: if requirements do not specify a tier,
+  // the quotation leaves selectedTier unselected (undefined) until explicitly chosen
+  if (!requirements.selectedTier) {
+    quotation.selectedTier = undefined;
+  } else {
+    const matchedTier = quotation.tiers.find((t) => t.tierId === requirements.selectedTier);
+    if (matchedTier) {
+      quotation.selectedTier = matchedTier;
+    }
+  }
+
   return quotation;
 }
 
@@ -193,8 +209,8 @@ export function formatQuotationMessage(
 }
 
 /**
- * Generates a deterministic canonical snapshot and SHA-256 hash of the exact requirements
- * that affect quotation pricing and validity:
+ * Generates a deterministic canonical snapshot and authenticated HMAC-SHA256 signature
+ * of the exact requirements that affect quotation pricing and validity:
  * - guestCount
  * - eventDate
  * - startTime
@@ -202,6 +218,105 @@ export function formatQuotationMessage(
  * - venueAddress
  * - selectedTier
  * - eventType (influences consumption calculations in quoteEngine)
+ */
+export const SNAPSHOT_CANONICAL_VERSION = "v1";
+
+/**
+ * Helper to determine if the execution context is a non-local or deployed cloud environment.
+ */
+function isDeployedOrNonLocalEnv(): boolean {
+  const nodeEnv = (process.env.NODE_ENV || "").toLowerCase().trim();
+  const appEnv = (process.env.APP_ENV || process.env.ENVIRONMENT || "").toLowerCase().trim();
+  const isCloudHost = Boolean(
+    process.env.RENDER ||
+    process.env.VERCEL ||
+    process.env.K_SERVICE ||
+    process.env.AWS_REGION
+  );
+
+  return (
+    nodeEnv === "production" ||
+    nodeEnv === "staging" ||
+    appEnv === "production" ||
+    appEnv === "staging" ||
+    appEnv === "uat" ||
+    isCloudHost
+  );
+}
+
+/**
+ * Retrieves the server-side HMAC secret for quotation snapshot signing and verification.
+ * 
+ * FAIL-CLOSED SECURITY GUARANTEE:
+ * - In production, staging, and deployed cloud environments, `QUOTATION_SNAPSHOT_SECRET` is strictly mandatory.
+ *   If missing, unconfigured, or empty, this function throws an error, failing closed immediately.
+ * - In explicitly local development / offline test environments (`NODE_ENV === "development" || "test"`),
+ *   a deterministic dev fallback secret is permitted to ensure zero-network offline testing.
+ * 
+ * KEY ROTATION SPECIFICATION:
+ * - Zero-downtime rotation is supported via dual-secret verification:
+ *   1. Primary secret: `QUOTATION_SNAPSHOT_SECRET` (used for signing new snapshots and primary verification).
+ *   2. Previous secret: `QUOTATION_SNAPSHOT_SECRET_PREVIOUS` (optionally accepted during key rotation windows).
+ * - During key rotation, set `QUOTATION_SNAPSHOT_SECRET_PREVIOUS` to the old key and `QUOTATION_SNAPSHOT_SECRET`
+ *   to the new key. In-flight quotations signed with the old key remain valid until they expire.
+ * - Once all in-flight quotations expire or complete, `QUOTATION_SNAPSHOT_SECRET_PREVIOUS` can be removed.
+ */
+export function getSnapshotHmacSecret(): string {
+  const secret = process.env.QUOTATION_SNAPSHOT_SECRET;
+  if (secret && secret.trim().length > 0) {
+    return secret.trim();
+  }
+  if (isDeployedOrNonLocalEnv()) {
+    throw new Error(
+      "QUOTATION_SNAPSHOT_SECRET environment variable is missing or mandatory in production, staging, and deployed environments. Refusing to operate unauthenticated."
+    );
+  }
+  return (
+    process.env.BREW_TEST_QUOTATION_SECRET ||
+    "brew-dev-quotation-snapshot-hmac-secret-fallback-do-not-use-in-prod"
+  );
+}
+
+/**
+ * Computes an authenticated HMAC-SHA256 digest over the canonical JSON payload.
+ */
+export function computeSnapshotHmac(canonicalPayload: string, secret: string): string {
+  return crypto.createHmac("sha256", secret).update(canonicalPayload).digest("hex");
+}
+
+export interface CanonicalSnapshotFields {
+  guestCount: number;
+  eventDate: string;
+  startTime: string;
+  durationHours: number;
+  venueAddress: string;
+  selectedTier: "BASIC" | "STANDARD" | "PREMIUM" | null;
+  eventType: string | null;
+}
+
+/**
+ * Deterministically canonicalizes quotation snapshot material fields into a versioned JSON payload.
+ * Guarantees consistent ordering and normalization across all pricing and operational parameters.
+ */
+export function buildCanonicalSnapshotPayload(fields: CanonicalSnapshotFields): string {
+  const canonicalObject = {
+    _version: SNAPSHOT_CANONICAL_VERSION,
+    durationHours: fields.durationHours,
+    eventDate: fields.eventDate,
+    eventType: fields.eventType ? normalizeEventType(fields.eventType) : "corporate",
+    guestCount: fields.guestCount,
+    selectedTier: fields.selectedTier,
+    startTime: fields.startTime,
+    venueAddress: (fields.venueAddress || "").trim().toLowerCase(),
+  };
+
+  return JSON.stringify(canonicalObject, Object.keys(canonicalObject).sort());
+}
+
+/**
+ * Creates an immutable, canonical quotation snapshot capturing all 7 material fields
+ * that directly influence pricing, equipment allocation, travel surcharges, and guest consumption.
+ * Generates an authenticated HMAC-SHA256 signature for tamper detection and data integrity enforcement.
  */
 export function createQuotationSnapshot(
   requirements: BookingRequirements,
@@ -215,19 +330,18 @@ export function createQuotationSnapshot(
   const selectedTier = requirements.selectedTier ?? null;
   const eventType = requirements.eventType ? requirements.eventType.trim() : null;
 
-  // Canonical object with sorted keys for deterministic SHA-256 hash calculation
-  const canonicalObject = {
-    durationHours,
-    eventDate,
-    eventType: eventType ? normalizeEventType(eventType) : "corporate",
+  const canonicalString = buildCanonicalSnapshotPayload({
     guestCount,
-    selectedTier,
+    eventDate,
     startTime,
-    venueAddress: venueAddress.toLowerCase(),
-  };
+    durationHours,
+    venueAddress,
+    selectedTier,
+    eventType,
+  });
 
-  const canonicalString = JSON.stringify(canonicalObject, Object.keys(canonicalObject).sort());
-  const hash = crypto.createHash("sha256").update(canonicalString).digest("hex");
+  const secret = getSnapshotHmacSecret();
+  const hash = computeSnapshotHmac(canonicalString, secret);
 
   return {
     guestCount,
@@ -242,16 +356,26 @@ export function createQuotationSnapshot(
   };
 }
 
+export interface VerifyQuotationIntegrityOptions {
+  authoritativeQuoteOverride?: EventQuotationRecord;
+}
+
 /**
- * Compares a saved quotation snapshot against current booking requirements.
+ * Compares a saved quotation snapshot against current booking requirements and authoritative quotation.
+ * Recomputes the canonical payload and HMAC-SHA256 signature to verify cryptographic snapshot integrity.
  * Verifies all 7 material fields affecting pricing, logistics, and operational feasibility.
- * Rejects confirmation if any material field was modified since the quotation was generated.
+ * Mandates existence of a non-empty active quotation record.
+ * Strictly verifies quotation tier existence and cross-object consistency (fail-closed).
+ * Strictly verifies authoritative pricing against deterministic quoteEngine recomputation.
  */
 export function verifyQuotationIntegrity(
   snapshot: QuotationMaterialSnapshot | null | undefined,
-  currentRequirements: BookingRequirements
+  currentRequirements: BookingRequirements,
+  activeQuotation?: EventQuotationRecord | null,
+  options?: VerifyQuotationIntegrityOptions
 ): QuotationIntegrityResult {
-  if (!snapshot) {
+  // 1. Mandatory quotation snapshot existence
+  if (!snapshot || typeof snapshot !== "object") {
     return {
       isMatch: false,
       mismatchedFields: ["snapshot_missing"],
@@ -259,6 +383,98 @@ export function verifyQuotationIntegrity(
     };
   }
 
+  // 2. Mandatory active quotation existence (fail-closed)
+  if (!activeQuotation || typeof activeQuotation !== "object") {
+    const mismatches = ["activeQuotation"];
+    if (currentRequirements.selectedTier !== null) {
+      mismatches.push("selectedTier");
+    }
+    return {
+      isMatch: false,
+      mismatchedFields: mismatches,
+      reason: "Active quotation record is mandatory for quotation integrity verification. Missing or null quotation records are rejected.",
+    };
+  }
+
+  // 3. Mandatory non-empty tier list on active quotation
+  if (!Array.isArray(activeQuotation.tiers) || activeQuotation.tiers.length === 0) {
+    const mismatches = ["activeQuotation_tiers"];
+    if (currentRequirements.selectedTier !== null) {
+      mismatches.push("selectedTier");
+    }
+    return {
+      isMatch: false,
+      mismatchedFields: mismatches,
+      reason: "Active quotation contains an invalid or empty tiers list. Verification failed closed.",
+    };
+  }
+
+  // 4. Strict HMAC-SHA256 format check on stored signature
+  if (!snapshot.hash || typeof snapshot.hash !== "string" || !/^[0-9a-f]{64}$/i.test(snapshot.hash)) {
+    return {
+      isMatch: false,
+      mismatchedFields: ["hash"],
+      reason: "Quotation snapshot has an invalid, missing, or malformed HMAC-SHA256 signature format.",
+    };
+  }
+
+  // 5. Fetch server-side HMAC secret (fail closed if unconfigured in production or deployed environments)
+  let primarySecret: string;
+  try {
+    primarySecret = getSnapshotHmacSecret();
+  } catch {
+    return {
+      isMatch: false,
+      mismatchedFields: ["hash"],
+      reason: "Quotation snapshot integrity check failed closed: server HMAC secret is not configured in production.",
+    };
+  }
+
+  // 6. Recompute canonical payload from stored snapshot fields
+  const canonicalPayload = buildCanonicalSnapshotPayload({
+    guestCount: snapshot.guestCount,
+    eventDate: snapshot.eventDate,
+    startTime: snapshot.startTime,
+    durationHours: snapshot.durationHours,
+    venueAddress: snapshot.venueAddress,
+    selectedTier: snapshot.selectedTier,
+    eventType: snapshot.eventType,
+  });
+
+  // Verify HMAC signature using constant-time comparison
+  const storedHashBuf = Buffer.from(snapshot.hash.toLowerCase(), "hex");
+  const primaryComputedHash = computeSnapshotHmac(canonicalPayload, primarySecret);
+  const primaryHashBuf = Buffer.from(primaryComputedHash.toLowerCase(), "hex");
+
+  let signatureValid =
+    storedHashBuf.length === primaryHashBuf.length &&
+    crypto.timingSafeEqual(storedHashBuf, primaryHashBuf);
+
+  // Key rotation support: if primary fails, attempt validation against previous secret if configured
+  if (!signatureValid && process.env.QUOTATION_SNAPSHOT_SECRET_PREVIOUS) {
+    const prevSecret = process.env.QUOTATION_SNAPSHOT_SECRET_PREVIOUS.trim();
+    if (prevSecret.length > 0) {
+      const prevComputedHash = computeSnapshotHmac(canonicalPayload, prevSecret);
+      const prevHashBuf = Buffer.from(prevComputedHash.toLowerCase(), "hex");
+      if (
+        storedHashBuf.length === prevHashBuf.length &&
+        crypto.timingSafeEqual(storedHashBuf, prevHashBuf)
+      ) {
+        signatureValid = true;
+      }
+    }
+  }
+
+  if (!signatureValid) {
+    return {
+      isMatch: false,
+      mismatchedFields: ["hash"],
+      reason:
+        "Quotation snapshot hash integrity check failed: stored signature does not match canonical recomputed HMAC-SHA256. Snapshot has been tampered with or corrupted.",
+    };
+  }
+
+  // 7. Compare all 7 material fields against current requirements
   const mismatchedFields: string[] = [];
 
   if (snapshot.guestCount !== (currentRequirements.guestCount ?? 0)) {
@@ -280,11 +496,27 @@ export function verifyQuotationIntegrity(
     mismatchedFields.push("venueAddress");
   }
 
-  // Tier integrity:
-  // If snapshot had a specific tier selected, changing it to a different tier is a mismatch.
-  // If snapshot had no tier selected (null), selecting one of the 3 quoted tiers is permissible.
-  if (snapshot.selectedTier !== null && snapshot.selectedTier !== currentRequirements.selectedTier) {
-    mismatchedFields.push("selectedTier");
+  // 8. Bidirectional Selected-Tier Consistency
+  // Enforce consistency between currentRequirements.selectedTier, snapshot.selectedTier, and activeQuotation.selectedTier
+  const reqTier = currentRequirements.selectedTier ?? null;
+  const snapTier = snapshot.selectedTier ?? null;
+  const quoteTier = activeQuotation.selectedTier ? activeQuotation.selectedTier.tierId : null;
+
+  if (reqTier === null && snapTier === null && quoteTier === null) {
+    // If all three are null, the unselected state is valid if supported by the quotation lifecycle
+  } else {
+    // If any one is non-null, all three must identify the same tier
+    if (reqTier === null || snapTier === null || quoteTier === null) {
+      mismatchedFields.push("selectedTier");
+    } else if (reqTier !== snapTier || reqTier !== quoteTier || snapTier !== quoteTier) {
+      mismatchedFields.push("selectedTier");
+    } else {
+      // All three are non-null and identify the same tier
+      const tierExistsInQuote = activeQuotation.tiers.some((t) => t.tierId === reqTier);
+      if (!tierExistsInQuote) {
+        mismatchedFields.push("selectedTier");
+      }
+    }
   }
 
   const snapNormEvent = normalizeEventType(snapshot.eventType);
@@ -293,11 +525,139 @@ export function verifyQuotationIntegrity(
     mismatchedFields.push("eventType");
   }
 
+  // 9. Authoritative Quotation Record Verification (Complete EventQuotationRecord comparison)
+  // Recomputes the authoritative quote via generateVoiceBookingQuotation() and verifies
+  // every financially and operationally significant field against activeQuotation.
+  try {
+    const authoritativeQuote =
+      options?.authoritativeQuoteOverride ||
+      generateVoiceBookingQuotation(
+        currentRequirements,
+        activeQuotation.customerId
+      );
+
+    // Verify operational parameters
+    if (
+      activeQuotation.guestCount !== authoritativeQuote.guestCount ||
+      activeQuotation.durationMinutes !== authoritativeQuote.durationMinutes ||
+      activeQuotation.eventDate !== authoritativeQuote.eventDate ||
+      activeQuotation.startTime !== authoritativeQuote.startTime ||
+      activeQuotation.endTime !== authoritativeQuote.endTime ||
+      activeQuotation.eventType !== authoritativeQuote.eventType
+    ) {
+      mismatchedFields.push("quotation_pricing_mismatch");
+    }
+
+    // Verify all quotation tiers and unit pricing
+    if (!activeQuotation.tiers || activeQuotation.tiers.length !== authoritativeQuote.tiers.length) {
+      mismatchedFields.push("quotation_pricing_mismatch");
+    } else {
+      for (const authTier of authoritativeQuote.tiers) {
+        const activeTier = activeQuotation.tiers.find((t) => t.tierId === authTier.tierId);
+        if (
+          !activeTier ||
+          activeTier.pricePerGuest !== authTier.pricePerGuest ||
+          activeTier.totalAmount !== authTier.totalAmount ||
+          activeTier.totalCost !== authTier.totalCost ||
+          activeTier.grossProfit !== authTier.grossProfit ||
+          activeTier.grossMarginPercent !== authTier.grossMarginPercent ||
+          activeTier.staffAssigned !== authTier.staffAssigned
+        ) {
+          mismatchedFields.push("quotation_pricing_mismatch");
+          break;
+        }
+      }
+    }
+
+    // Verify selected tier pricing if selected
+    if (activeQuotation.selectedTier) {
+      const authSelectedTier = authoritativeQuote.tiers.find(
+        (t) => t.tierId === activeQuotation.selectedTier?.tierId
+      );
+      if (
+        !authSelectedTier ||
+        activeQuotation.selectedTier.tierId !== authSelectedTier.tierId ||
+        activeQuotation.selectedTier.totalAmount !== authSelectedTier.totalAmount ||
+        activeQuotation.selectedTier.pricePerGuest !== authSelectedTier.pricePerGuest ||
+        activeQuotation.selectedTier.totalCost !== authSelectedTier.totalCost ||
+        activeQuotation.selectedTier.grossProfit !== authSelectedTier.grossProfit ||
+        activeQuotation.selectedTier.grossMarginPercent !== authSelectedTier.grossMarginPercent ||
+        activeQuotation.selectedTier.staffAssigned !== authSelectedTier.staffAssigned
+      ) {
+        mismatchedFields.push("quotation_pricing_mismatch");
+      }
+    }
+
+    // Verify logistics presence and exact field values (mandatory comparison)
+    const hasActiveLogistics = Boolean(activeQuotation.logistics);
+    const hasAuthLogistics = Boolean(authoritativeQuote.logistics);
+
+    if (hasAuthLogistics !== hasActiveLogistics) {
+      mismatchedFields.push("quotation_pricing_mismatch");
+    } else if (hasAuthLogistics && activeQuotation.logistics && authoritativeQuote.logistics) {
+      if (
+        activeQuotation.logistics.totalLogisticsCost !== authoritativeQuote.logistics.totalLogisticsCost ||
+        activeQuotation.logistics.baseTravelFee !== authoritativeQuote.logistics.baseTravelFee ||
+        activeQuotation.logistics.distanceSurcharge !== authoritativeQuote.logistics.distanceSurcharge ||
+        activeQuotation.logistics.setupTeardownFee !== authoritativeQuote.logistics.setupTeardownFee ||
+        activeQuotation.logistics.distanceKm !== authoritativeQuote.logistics.distanceKm ||
+        activeQuotation.logistics.estimatedTravelTimeMinutes !== authoritativeQuote.logistics.estimatedTravelTimeMinutes ||
+        activeQuotation.logistics.isServiceable !== authoritativeQuote.logistics.isServiceable ||
+        activeQuotation.logistics.baseLocation !== authoritativeQuote.logistics.baseLocation ||
+        activeQuotation.logistics.destinationLocation !== authoritativeQuote.logistics.destinationLocation
+      ) {
+        mismatchedFields.push("quotation_pricing_mismatch");
+      }
+    }
+
+    // Verify ingredientManifest presence and exact items (mandatory comparison)
+    const hasActiveManifest = Array.isArray(activeQuotation.ingredientManifest);
+    const hasAuthManifest = Array.isArray(authoritativeQuote.ingredientManifest);
+
+    if (hasAuthManifest !== hasActiveManifest) {
+      mismatchedFields.push("quotation_pricing_mismatch");
+    } else if (hasAuthManifest && activeQuotation.ingredientManifest && authoritativeQuote.ingredientManifest) {
+      if (activeQuotation.ingredientManifest.length !== authoritativeQuote.ingredientManifest.length) {
+        mismatchedFields.push("quotation_pricing_mismatch");
+      } else {
+        // Reject missing, extra, or altered manifest items
+        for (const authItem of authoritativeQuote.ingredientManifest) {
+          const activeItem = activeQuotation.ingredientManifest.find(
+            (i) => i.ingredient === authItem.ingredient
+          );
+          if (
+            !activeItem ||
+            activeItem.quantity !== authItem.quantity ||
+            activeItem.unitCost !== authItem.unitCost ||
+            activeItem.totalCost !== authItem.totalCost ||
+            activeItem.unit !== authItem.unit
+          ) {
+            mismatchedFields.push("quotation_pricing_mismatch");
+            break;
+          }
+        }
+        for (const activeItem of activeQuotation.ingredientManifest) {
+          const authItem = authoritativeQuote.ingredientManifest.find(
+            (i) => i.ingredient === activeItem.ingredient
+          );
+          if (!authItem) {
+            mismatchedFields.push("quotation_pricing_mismatch");
+            break;
+          }
+        }
+      }
+    }
+  } catch {
+    mismatchedFields.push("quotation_pricing_mismatch");
+  }
+
   if (mismatchedFields.length > 0) {
+    // Deduplicate mismatched fields
+    const uniqueMismatches = Array.from(new Set(mismatchedFields));
     return {
       isMatch: false,
-      mismatchedFields,
-      reason: `Quotation snapshot integrity check failed. Material fields modified since quote generation: ${mismatchedFields.join(", ")}. Re-quotation required.`,
+      mismatchedFields: uniqueMismatches,
+      reason: `Quotation integrity check failed. Discrepancies detected: ${uniqueMismatches.join(", ")}. Re-quotation required.`,
     };
   }
 

@@ -129,8 +129,10 @@ export async function POST(req: NextRequest) {
     } else if (
       role === "barista" ||
       role === "fleet_admin" ||
+      role === "admin" ||
       user?.role === "barista" ||
-      user?.role === "fleet_admin"
+      user?.role === "fleet_admin" ||
+      user?.role === "admin"
     ) {
       // PREVENT PRIVILEGE ESCALATION: Clients cannot self-assign staff roles without valid Staff PIN
       return NextResponse.json(

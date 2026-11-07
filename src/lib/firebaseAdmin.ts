@@ -15,6 +15,7 @@ import { getFirestore, type Firestore, FieldValue, Timestamp } from "firebase-ad
 
 let adminApp: App | null = null;
 let adminDb: Firestore | null = null;
+let overrideDb: Firestore | null | undefined = undefined;
 let initError: string | null = null;
 
 function getProjectId(): string {
@@ -96,6 +97,7 @@ export function getAdminApp(): App | null {
 }
 
 export function getAdminFirestore(): Firestore | null {
+  if (overrideDb !== undefined) return overrideDb;
   if (adminDb) return adminDb;
 
   const app = getAdminApp();
@@ -116,6 +118,11 @@ export function getAdminFirestore(): Firestore | null {
 
 export function isFirebaseAdminAvailable(): boolean {
   return getAdminFirestore() !== null;
+}
+
+export function setAdminFirestoreForTesting(db: Firestore | null | undefined): void {
+  overrideDb = db;
+  adminDb = db ?? null;
 }
 
 export { FieldValue, Timestamp };

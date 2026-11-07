@@ -63,7 +63,7 @@ export interface DndAuditEvent {
   timestamp: string; // ISO 8601 UTC
 }
 
-export type PolicyDecisionStatus = "allowed" | "blocked" | "requires_review";
+export type PolicyDecisionStatus = "allowed" | "blocked" | "error" | "requires_review";
 
 export type PolicyReasonCode =
   | "FEATURE_DISABLED"
@@ -73,6 +73,7 @@ export type PolicyReasonCode =
   | "CONSENT_REVOKED"
   | "MARKETING_CONSENT_REQUIRED"
   | "OUTSIDE_CALLING_HOURS"
+  | "INFRASTRUCTURE_FAILURE"
   | "REPOSITORY_INTEGRITY_MISMATCH"
   | "ALLOWED";
 
@@ -84,15 +85,44 @@ export interface PolicyEvaluationRequest {
   currentTime?: Date;
 }
 
-export interface PolicyEvaluationResult {
-  status: PolicyDecisionStatus;
-  reason: PolicyReasonCode;
-  details: string;
-  evaluatedAt: string;
-  channel: CommunicationChannel;
-  purpose: CommunicationPurpose;
-  phoneNumberMasked: string; // Safe representation, e.g. +91******3210
-}
+export type PolicyEvaluationOutcome =
+  | {
+      status: "allowed";
+      reason: "ALLOWED";
+      details: string;
+      evaluatedAt: string;
+      channel: CommunicationChannel;
+      purpose: CommunicationPurpose;
+      phoneNumberMasked: string;
+    }
+  | {
+      status: "blocked";
+      reason:
+        | "CONSENT_MISSING"
+        | "CONSENT_REVOKED"
+        | "MARKETING_CONSENT_REQUIRED"
+        | "DND_ACTIVE"
+        | "OUTSIDE_CALLING_HOURS"
+        | "INVALID_PHONE_NUMBER"
+        | "FEATURE_DISABLED";
+      details: string;
+      evaluatedAt: string;
+      channel: CommunicationChannel;
+      purpose: CommunicationPurpose;
+      phoneNumberMasked: string;
+    }
+  | {
+      status: "error";
+      reason: "INFRASTRUCTURE_FAILURE" | "REPOSITORY_INTEGRITY_MISMATCH";
+      details: string;
+      isRetryable: true;
+      evaluatedAt: string;
+      channel: CommunicationChannel;
+      purpose: CommunicationPurpose;
+      phoneNumberMasked: string;
+    };
+
+export type PolicyEvaluationResult = PolicyEvaluationOutcome;
 
 /* ========================================================================== */
 /* Voice Provider Interfaces (Simulation-Aware)                               */
@@ -100,11 +130,15 @@ export interface PolicyEvaluationResult {
 
 export type VoiceLanguage = "en" | "hi" | "te";
 
+export type MockVoiceCallOutcome = "answered" | "no_answer" | "busy" | "failed";
+
 export interface VoiceSessionParams {
   sessionId: string;
   phoneNumber: string;
   language: VoiceLanguage;
   enquiryId?: string;
+  idempotencyKey?: string;
+  testAuthorizationId?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -112,6 +146,7 @@ export interface VoiceSessionResult {
   sessionId: string;
   providerCallId: string;
   status: "simulated_initiated" | "simulated_failed" | "initiated" | "failed";
+  callOutcome?: MockVoiceCallOutcome;
   startedAt: string;
   isSimulated: boolean;
   providerMode: "mock" | "simulated" | "production";
@@ -126,13 +161,15 @@ export type VoiceCallStatus =
   | "simulated_busy"
   | "simulated_no_answer"
   | "simulated_ended"
+  | "simulated_answered"
   | "queued"
   | "ringing"
   | "in_progress"
   | "completed"
   | "failed"
   | "busy"
-  | "no_answer";
+  | "no_answer"
+  | "answered";
 
 export interface VoiceSessionStatusResult {
   sessionId: string;
@@ -153,9 +190,19 @@ export interface VoiceSessionEndResult {
 
 export interface VoiceProvider {
   readonly providerName: string;
+  readonly isAsynchronous?: boolean;
   startSession(params: VoiceSessionParams): Promise<VoiceSessionResult>;
   getStatus(sessionId: string): Promise<VoiceSessionStatusResult>;
   endSession(sessionId: string, reason?: string): Promise<VoiceSessionEndResult>;
+  setSimulatedCustomerTurns?(turns: string[]): void;
+  setTestHarnessFallbackCustomerTurns?(turns: string[]): void;
+  setSessionCustomerTurns?(sessionId: string, turns: string[]): void;
+  getSimulatedCustomerTurns?(
+    sessionId?: string,
+    options?: { allowGlobalFallback?: boolean }
+  ): string[];
+  clearSessionCustomerTurns?(sessionId: string): void;
+  clearCustomerTurns?(): void;
 }
 
 /* ========================================================================== */
@@ -184,6 +231,7 @@ export interface WhatsAppTemplateParams {
   language: string;
   components: WhatsAppTemplateComponent[];
   enquiryId?: string;
+  idempotencyKey?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -217,8 +265,19 @@ export interface WhatsAppMessageStatusResult {
 
 export interface WhatsAppProvider {
   readonly providerName: string;
+  readonly isSimulated?: boolean;
+  readonly providerMode?: "mock" | "simulated" | "production";
   sendTemplate(params: WhatsAppTemplateParams): Promise<WhatsAppSendResult>;
   getMessageStatus(messageId: string): Promise<WhatsAppMessageStatusResult>;
+}
+
+export interface WhatsAppCloudApiErrorDetails {
+  statusCode: number;
+  code?: number;
+  subcode?: number;
+  type?: string;
+  isRetryable: boolean;
+  fbtraceId?: string;
 }
 
 /* ========================================================================== */
@@ -254,4 +313,89 @@ export interface DndRepository {
   ): Promise<boolean>;
   remove(phoneNumber: string, justification: string): Promise<boolean>;
   getAuditHistory(): ReadonlyArray<DndAuditEvent>;
+}
+
+/* ========================================================================== */
+/* Outbox & Transactional Delivery Types (Phase 6.3.3)                         */
+/* ========================================================================== */
+
+export type BookingLifecycleEventType =
+  | "booking_created"
+  | "booking_awaiting_staff_approval"
+  | "booking_confirmed"
+  | "booking_declined"
+  | "booking_cancelled"
+  | "booking_human_handoff"
+  | "booking_reminder";
+
+export type DeliveryStatus =
+  | "pending"
+  | "processing"
+  | "dispatched"
+  | "blocked"
+  | "failed"
+  | "permanently_failed";
+
+export interface CommunicationDeliveryRecord {
+  id: string; // del_{eventId}_{channel}
+  eventId: string; // evt_{eventType}_{sessionId}_r{revision}
+  sessionId: string;
+  officialBookingId?: string;
+  eventType: BookingLifecycleEventType;
+  channel: CommunicationChannel;
+  purpose: CommunicationPurpose; // strictly "transactional_update"
+  status: DeliveryStatus;
+  phoneNumberMasked: string; // Safe masked phone number, never raw in outbox
+  templateName?: string;
+  templateLanguage?: string;
+  templateParams?: Record<string, unknown>;
+  attemptCount: number; // Concurrency lease grants / claims counter (unbounded by maxAttempts)
+  callAttemptCount?: number; // Genuine logical provider call attempts
+  currentAttemptId?: string | null; // Deterministic attempt key, e.g. del_..._call1
+  maxAttempts: number; // Maximum logical call attempts allowed before permanent failure (default: 3)
+  claimOwner?: string | null;
+  claimToken?: string | null;
+  claimedAt?: string | null;
+  leaseExpiresAt?: string | null;
+  nextRetryAt?: string | null;
+  lastError?: {
+    code?: string;
+    message: string;
+    isRetryable: boolean;
+    occurredAt: string;
+    attempt?: number;
+  } | null;
+  policyResult?: {
+    status: "allowed" | "blocked" | "error";
+    reason: string;
+    details: string;
+    evaluatedAt: string;
+  } | null;
+  providerResult?: {
+    providerCallId?: string;
+    providerMessageId?: string;
+    status: string;
+    callOutcome?: MockVoiceCallOutcome;
+    isSimulated: boolean;
+    providerMode: string;
+    completedAt: string;
+  } | null;
+  createdAt: string; // ISO 8601 UTC
+  updatedAt: string; // ISO 8601 UTC
+}
+
+export interface OutboxEventRecord {
+  id: string; // evt_{eventType}_{sessionId}_r{revision}
+  sessionId: string;
+  officialBookingId?: string;
+  eventType: BookingLifecycleEventType;
+  sessionRevision: number;
+  deliveryIds: string[];
+  createdAt: string;
+}
+
+export interface ClaimContext {
+  claimOwner: string;
+  claimedAt: string;
+  claimToken: string;
 }

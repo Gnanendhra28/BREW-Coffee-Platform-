@@ -59,3 +59,56 @@ export class FeatureDisabledError extends CommunicationError {
     this.name = "FeatureDisabledError";
   }
 }
+
+export class ProviderIdempotencyConflictError extends CommunicationError {
+  constructor(
+    message = "Provider idempotency conflict: key already used with conflicting payload."
+  ) {
+    super(message, "IDEMPOTENCY_CONFLICT");
+    this.name = "ProviderIdempotencyConflictError";
+  }
+}
+
+export class StaleClaimError extends CommunicationError {
+  constructor(
+    message = "Outbox delivery claim is stale, owned by another worker, or lease has expired."
+  ) {
+    super(message, "STALE_CLAIM");
+    this.name = "StaleClaimError";
+  }
+}
+
+export class WhatsAppCloudApiError extends CommunicationError {
+  public readonly statusCode: number;
+  public readonly metaErrorCode?: number;
+  public readonly metaErrorSubcode?: number;
+  public readonly metaErrorType?: string;
+  public readonly isRetryable: boolean;
+  public readonly fbtraceId?: string;
+
+  constructor(
+    message: string,
+    options: {
+      statusCode: number;
+      code?: number;
+      subcode?: number;
+      type?: string;
+      isRetryable?: boolean;
+      fbtraceId?: string;
+    }
+  ) {
+    // Sanitize any bearer tokens or authorization headers from the message string
+    const sanitized = message
+      .replace(/Bearer\s+[A-Za-z0-9\-_\.]+/gi, "Bearer [REDACTED]")
+      .replace(/EAAG[A-Za-z0-9]+/gi, "[REDACTED_TOKEN]");
+
+    super(sanitized, "WHATSAPP_CLOUD_API_ERROR");
+    this.name = "WhatsAppCloudApiError";
+    this.statusCode = options.statusCode;
+    this.metaErrorCode = options.code;
+    this.metaErrorSubcode = options.subcode;
+    this.metaErrorType = options.type;
+    this.fbtraceId = options.fbtraceId;
+    this.isRetryable = options.isRetryable ?? (options.statusCode >= 500 || options.code === 130429);
+  }
+}

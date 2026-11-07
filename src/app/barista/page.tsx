@@ -38,6 +38,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useVan, OrderStatus } from "../../context/VanContext";
 import { MENU_ITEMS } from "../../data/menuData";
 import { BaristaOpsAssistant } from "../../components/BaristaOpsAssistant";
+import { VoiceBookingsManager } from "../../components/VoiceBookingsManager";
 import {
   analyzeStockDepletion,
   generateSocialBroadcast,
@@ -56,6 +57,7 @@ import {
   processEventInquiry,
   ConciergeInquiryResult,
 } from "../../lib/smartAgentsEngine";
+
 
 export default function BaristaKDSPage() {
   const {
@@ -187,6 +189,8 @@ export default function BaristaKDSPage() {
   const hasArrivedCurbside = activeCurbsideOrders.some(
     (o) => curbsideArrivals[o.id] === "arrived"
   );
+
+
 
   // Clock
   useEffect(() => {
@@ -2410,6 +2414,14 @@ export default function BaristaKDSPage() {
                   </div>
                 );
               })()}
+            </div>
+
+            {/* AGENT #4.1: MULTILINGUAL VOICE BOOKING CONCIERGE & STAFF APPROVALS */}
+            <div className="p-6 rounded-3xl bg-[#22160F] border border-amber-500/30 shadow-xl space-y-4">
+              <VoiceBookingsManager
+                title="Voice Booking Concierge · Staff Inquiries & Approvals"
+                subtitle="Review simulated multilingual voice bookings, verify requirements & margins, and authorize confirmed bookings."
+              />
             </div>
 
             {/* AGENT #5: HYPER-LOCAL HYPE BROADCASTER */}

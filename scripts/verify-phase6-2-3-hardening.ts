@@ -97,10 +97,11 @@ async function runPhase623Tests() {
   {
     const reqs = buildBaseRequirements();
     const snapshot = createQuotationSnapshot(reqs);
+    const quote = generateVoiceBookingQuotation(reqs);
 
     // Customer attempts to confirm but eventDate was modified to next day
     const modifiedReqs = { ...reqs, eventDate: "2026-11-21" };
-    const integrity = verifyQuotationIntegrity(snapshot, modifiedReqs);
+    const integrity = verifyQuotationIntegrity(snapshot, modifiedReqs, quote);
 
     assert(!integrity.isMatch, "Integrity check detects eventDate mismatch");
     assert(integrity.mismatchedFields.includes("eventDate"), "Mismatched fields list includes 'eventDate'");
@@ -117,6 +118,7 @@ async function runPhase623Tests() {
         clearedFields: [],
       },
       hasValidQuotation: true,
+      activeQuotation: quote,
       currentRequirements: modifiedReqs,
       quotationSnapshot: snapshot,
     });
@@ -132,9 +134,10 @@ async function runPhase623Tests() {
   {
     const reqs = buildBaseRequirements();
     const snapshot = createQuotationSnapshot(reqs);
+    const quote = generateVoiceBookingQuotation(reqs);
 
     const modifiedReqs = { ...reqs, startTime: "16:00" };
-    const integrity = verifyQuotationIntegrity(snapshot, modifiedReqs);
+    const integrity = verifyQuotationIntegrity(snapshot, modifiedReqs, quote);
 
     assert(!integrity.isMatch, "Integrity check detects startTime mismatch");
     assert(integrity.mismatchedFields.includes("startTime"), "Mismatched fields list includes 'startTime'");
@@ -151,6 +154,7 @@ async function runPhase623Tests() {
         clearedFields: [],
       },
       hasValidQuotation: true,
+      activeQuotation: quote,
       currentRequirements: modifiedReqs,
       quotationSnapshot: snapshot,
     });
@@ -165,9 +169,10 @@ async function runPhase623Tests() {
   {
     const reqs = buildBaseRequirements();
     const snapshot = createQuotationSnapshot(reqs);
+    const quote = generateVoiceBookingQuotation(reqs);
 
     const modifiedReqs = { ...reqs, durationHours: 5 };
-    const integrity = verifyQuotationIntegrity(snapshot, modifiedReqs);
+    const integrity = verifyQuotationIntegrity(snapshot, modifiedReqs, quote);
 
     assert(!integrity.isMatch, "Integrity check detects durationHours mismatch");
     assert(integrity.mismatchedFields.includes("durationHours"), "Mismatched fields includes 'durationHours'");
@@ -184,6 +189,7 @@ async function runPhase623Tests() {
         clearedFields: [],
       },
       hasValidQuotation: true,
+      activeQuotation: quote,
       currentRequirements: modifiedReqs,
       quotationSnapshot: snapshot,
     });
@@ -198,9 +204,10 @@ async function runPhase623Tests() {
   {
     const reqs = buildBaseRequirements();
     const snapshot = createQuotationSnapshot(reqs);
+    const quote = generateVoiceBookingQuotation(reqs);
 
     const modifiedReqs = { ...reqs, venueAddress: "Gachibowli, Hyderabad" };
-    const integrity = verifyQuotationIntegrity(snapshot, modifiedReqs);
+    const integrity = verifyQuotationIntegrity(snapshot, modifiedReqs, quote);
 
     assert(!integrity.isMatch, "Integrity check detects venueAddress mismatch");
     assert(integrity.mismatchedFields.includes("venueAddress"), "Mismatched fields includes 'venueAddress'");
@@ -217,6 +224,7 @@ async function runPhase623Tests() {
         clearedFields: [],
       },
       hasValidQuotation: true,
+      activeQuotation: quote,
       currentRequirements: modifiedReqs,
       quotationSnapshot: snapshot,
     });
@@ -231,10 +239,11 @@ async function runPhase623Tests() {
   {
     const reqs = { ...buildBaseRequirements(), selectedTier: "BASIC" as const };
     const snapshot = createQuotationSnapshot(reqs);
+    const quote = generateVoiceBookingQuotation(reqs);
 
     // Customer shifts tier from BASIC to PREMIUM without re-quotation
     const modifiedReqs = { ...reqs, selectedTier: "PREMIUM" as const };
-    const integrity = verifyQuotationIntegrity(snapshot, modifiedReqs);
+    const integrity = verifyQuotationIntegrity(snapshot, modifiedReqs, quote);
 
     assert(!integrity.isMatch, "Integrity check detects selectedTier mismatch");
     assert(integrity.mismatchedFields.includes("selectedTier"), "Mismatched fields includes 'selectedTier'");
@@ -251,6 +260,7 @@ async function runPhase623Tests() {
         clearedFields: [],
       },
       hasValidQuotation: true,
+      activeQuotation: quote,
       currentRequirements: modifiedReqs,
       quotationSnapshot: snapshot,
     });
@@ -265,10 +275,11 @@ async function runPhase623Tests() {
   {
     const reqs = { ...buildBaseRequirements(), eventType: "corporate" };
     const snapshot = createQuotationSnapshot(reqs);
+    const quote = generateVoiceBookingQuotation(reqs);
 
     // Wedding has different consumption multipliers in Event Booking Concierge
     const modifiedReqs = { ...reqs, eventType: "wedding" };
-    const integrity = verifyQuotationIntegrity(snapshot, modifiedReqs);
+    const integrity = verifyQuotationIntegrity(snapshot, modifiedReqs, quote);
 
     assert(!integrity.isMatch, "Integrity check detects eventType mismatch");
     assert(integrity.mismatchedFields.includes("eventType"), "Mismatched fields includes 'eventType'");
@@ -285,6 +296,7 @@ async function runPhase623Tests() {
         clearedFields: [],
       },
       hasValidQuotation: true,
+      activeQuotation: quote,
       currentRequirements: modifiedReqs,
       quotationSnapshot: snapshot,
     });
@@ -299,8 +311,9 @@ async function runPhase623Tests() {
   {
     const reqs = buildBaseRequirements();
     const snapshot = createQuotationSnapshot(reqs);
+    const quote = generateVoiceBookingQuotation(reqs);
 
-    const integrity = verifyQuotationIntegrity(snapshot, reqs);
+    const integrity = verifyQuotationIntegrity(snapshot, reqs, quote);
     assert(integrity.isMatch, "Integrity check passes when requirements are identical");
     assert(integrity.mismatchedFields.length === 0, "Zero mismatched fields for unchanged requirements");
 
@@ -316,6 +329,7 @@ async function runPhase623Tests() {
         clearedFields: [],
       },
       hasValidQuotation: true,
+      activeQuotation: quote,
       currentRequirements: reqs,
       quotationSnapshot: snapshot,
     });
@@ -373,7 +387,7 @@ async function runPhase623Tests() {
   {
     const session = await createQuotationReadySession("sess_schema_guard_test");
     session.state = "awaiting_staff_approval";
-    await repository.save(session);
+    await repository.save(session, session.revision);
 
     // 9.1 Missing staffIdentity
     let err1 = false;
@@ -446,7 +460,7 @@ async function runPhase623Tests() {
   {
     const session = await createQuotationReadySession("sess_forgery_test");
     session.state = "awaiting_staff_approval";
-    await repository.save(session);
+    await repository.save(session, session.revision);
 
     // Generate genuine customer session token (unprivileged user)
     const customerToken = await createSessionToken({
@@ -498,7 +512,7 @@ async function runPhase623Tests() {
   {
     const session = await createQuotationReadySession("sess_expired_test");
     session.state = "awaiting_staff_approval";
-    await repository.save(session);
+    await repository.save(session, session.revision);
 
     // 11.1 Missing cookie
     const missingCookieReq = new NextRequest("http://localhost:3000/api/voice-booking/approve", {
@@ -555,7 +569,7 @@ async function runPhase623Tests() {
       const sessId = `sess_valid_auth_${role}`;
       const session = await createQuotationReadySession(sessId);
       session.state = "awaiting_staff_approval";
-      await repository.save(session);
+      await repository.save(session, session.revision);
 
       // Create genuine HMAC-signed token
       const token = await createSessionToken({

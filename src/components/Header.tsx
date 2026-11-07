@@ -37,6 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
   const isLocationPage = pathname === "/location";
   const isBoardPage = pathname === "/board";
   const isReviewsPage = pathname === "/reviews";
+  const isVoicePage = pathname?.startsWith("/voice-booking");
   const { user, openAuthModal, signOutUser } = useAuth();
   const { totalItems } = useCart();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -60,6 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
     { label: "Home", active: pathname === "/", href: "/" },
     { label: "Menu", active: isMenuPage, href: "/menu" },
     { label: "Van Tracker", active: isLocationPage, href: "/location" },
+    { label: "Voice Booking", active: isVoicePage, href: "/voice-booking" },
     { label: "Board", active: isBoardPage, href: "/board" },
     { label: "Reviews", active: isReviewsPage, href: "/reviews" },
     { label: "About Us", active: false, href: pathname === "/" ? "#about" : "/#about" },

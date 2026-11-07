@@ -11,4 +11,8 @@ export * from "./quotationAdapter";
 export * from "./prompts";
 export * from "./providers/extractionProvider";
 export * from "./repositories/sessionRepository";
+export * from "./repositories/firestoreSessionRepository";
+export * from "./vanRequestBridge";
 export * from "./conversationEngine";
+export * from "./prototypeConfig";
+export * from "./browserSpeechAdapter";

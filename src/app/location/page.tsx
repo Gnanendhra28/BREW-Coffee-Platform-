@@ -22,6 +22,7 @@ import {
   Sparkles,
   Check,
   Copy,
+  Phone,
 } from "lucide-react";
 import { Header } from "../../components/Header";
 import { useVan } from "../../context/VanContext";
@@ -43,6 +44,10 @@ export default function VanLocationPage() {
   const [requestDate, setRequestDate] = useState("");
   const [requestCrowd, setRequestCrowd] = useState("100–300 People");
   const [requestNotes, setRequestNotes] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [voiceConsent, setVoiceConsent] = useState(false);
+  const [whatsappConsent, setWhatsappConsent] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [lastSubmitted, setLastSubmitted] = useState<{
@@ -55,6 +60,8 @@ export default function VanLocationPage() {
   const [quotation, setQuotation] = useState<EventQuotation | null>(null);
   const [selectedTier, setSelectedTier] = useState<string>("Artisanal Signature");
   const [copiedQuote, setCopiedQuote] = useState(false);
+  const [voiceSessionId, setVoiceSessionId] = useState<string | null>(null);
+  const [submittedRequestId, setSubmittedRequestId] = useState<string | null>(null);
 
   // Close modal on Escape key press
   React.useEffect(() => {
@@ -80,6 +87,21 @@ export default function VanLocationPage() {
     e.preventDefault();
     if (!notifyContact.trim()) return;
 
+    // Validate phone number if either voice or whatsapp consent is checked
+    if (voiceConsent || whatsappConsent) {
+      const cleanPhone = phoneNumber.replace(/[\s\-\(\)\.]/g, "").trim();
+      const isValid =
+        (cleanPhone.startsWith("+") && cleanPhone.length >= 10 && cleanPhone.length <= 16) ||
+        /^[6-9]\d{9}$/.test(cleanPhone) ||
+        /^0[6-9]\d{9}$/.test(cleanPhone);
+
+      if (!isValid) {
+        setPhoneError("A valid 10-digit mobile number or E.164 phone number is required when opting in to voice calls or WhatsApp notifications.");
+        return;
+      }
+    }
+    setPhoneError("");
+
     setIsSubmitting(true);
 
     try {
@@ -88,6 +110,9 @@ export default function VanLocationPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contact: notifyContact.trim(),
+          phoneNumber: phoneNumber.trim() || undefined,
+          voiceConsent,
+          whatsappConsent,
           organization: requestOrg.trim() || "College / Office Campus",
           location: requestLocation.trim() || "Telangana / AP",
           eventDate: requestDate.trim() || "Flexible",
@@ -106,6 +131,12 @@ export default function VanLocationPage() {
 
       if (data.quotation) {
         setQuotation(data.quotation);
+      }
+      if (data.voiceSessionId) {
+        setVoiceSessionId(data.voiceSessionId);
+      }
+      if (data.requestId) {
+        setSubmittedRequestId(data.requestId);
       }
       if (data.mailtoUrl) {
         setMailtoBackup(data.mailtoUrl);
@@ -676,6 +707,48 @@ export default function VanLocationPage() {
                       </div>
                     </div>
 
+                    {/* Voice Concierge Simulation Banner (if voice consent granted) */}
+                    {voiceSessionId && (
+                      <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-[#DFAB6C]/15 to-amber-500/10 border-2 border-[#DFAB6C]/40 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-[#DFAB6C] text-[#1A110B] flex items-center justify-center font-bold">
+                              <Phone className="w-4 h-4 animate-pulse" />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-serif font-bold text-white">
+                                AI Voice Concierge Call Initialized
+                              </h4>
+                              <p className="text-[11px] text-[#DFAB6C] flex items-center gap-2">
+                                {submittedRequestId && (
+                                  <>
+                                    <span>Ref: <code className="font-mono text-white/90">{submittedRequestId}</code></span>
+                                    <span>•</span>
+                                  </>
+                                )}
+                                <span>Session: <code className="font-mono">{voiceSessionId}</code></span>
+                              </p>
+                            </div>
+                          </div>
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold uppercase tracking-wider border border-emerald-500/30">
+                            Simulated In-Browser
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#C4B4A8] leading-relaxed">
+                          Your voice booking consent was registered. Experience the simulated interactive voice concierge in your browser with live call state, multilingual dialogue, and real-time quote updates.
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <Link
+                            href={`/voice-booking/${voiceSessionId}`}
+                            className="px-4 py-2.5 rounded-xl bg-[#DFAB6C] hover:bg-white text-[#1A110B] text-xs font-bold transition-all flex items-center gap-2 shadow-lg cursor-pointer"
+                          >
+                            <span>Open Voice Booking Experience</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                        </div>
+                      </div>
+                    )}
+
                     {/* 1-Click Booking & Dispatch Actions */}
                     <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
                       {gmailUrl && (
@@ -729,8 +802,14 @@ export default function VanLocationPage() {
                           setIsModalOpen(false);
                           setSubmitSuccess(false);
                           setNotifyContact("");
+                          setPhoneNumber("");
+                          setVoiceConsent(false);
+                          setWhatsappConsent(false);
+                          setPhoneError("");
                           setRequestOrg("");
                           setRequestLocation("");
+                          setVoiceSessionId(null);
+                          setSubmittedRequestId(null);
                         }}
                         className="py-3 px-4 rounded-xl bg-[#DFAB6C] hover:bg-white text-stone-950 text-xs font-bold transition-all cursor-pointer"
                       >
@@ -763,11 +842,62 @@ export default function VanLocationPage() {
                       </span>
                       .
                     </p>
+
+                    {voiceSessionId && (
+                      <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-[#DFAB6C]/15 to-amber-500/10 border-2 border-[#DFAB6C]/40 space-y-3 text-left">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-[#DFAB6C] text-[#1A110B] flex items-center justify-center font-bold">
+                              <Phone className="w-4 h-4 animate-pulse" />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-serif font-bold text-white">
+                                AI Voice Concierge Call Initialized
+                              </h4>
+                              <p className="text-[11px] text-[#DFAB6C] flex items-center gap-2">
+                                {submittedRequestId && (
+                                  <>
+                                    <span>Ref: <code className="font-mono text-white/90">{submittedRequestId}</code></span>
+                                    <span>•</span>
+                                  </>
+                                )}
+                                <span>Session: <code className="font-mono">{voiceSessionId}</code></span>
+                              </p>
+                            </div>
+                          </div>
+                          <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold uppercase tracking-wider border border-emerald-500/30">
+                            Simulated In-Browser
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#C4B4A8] leading-relaxed">
+                          Your voice booking consent was registered. Experience the simulated interactive voice concierge in your browser with live call state and multilingual dialogue.
+                        </p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <Link
+                            href={`/voice-booking/${voiceSessionId}`}
+                            className="px-4 py-2.5 rounded-xl bg-[#DFAB6C] hover:bg-white text-[#1A110B] text-xs font-bold transition-all flex items-center gap-2 shadow-lg cursor-pointer"
+                          >
+                            <span>Open Voice Booking Experience</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="pt-3 flex justify-center">
                       <button
                         onClick={() => {
                           setIsModalOpen(false);
                           setSubmitSuccess(false);
+                          setNotifyContact("");
+                          setPhoneNumber("");
+                          setVoiceConsent(false);
+                          setWhatsappConsent(false);
+                          setPhoneError("");
+                          setRequestOrg("");
+                          setRequestLocation("");
+                          setVoiceSessionId(null);
+                          setSubmittedRequestId(null);
                         }}
                         className="py-2.5 px-6 rounded-xl bg-[#DFAB6C] text-stone-950 text-xs font-bold cursor-pointer"
                       >
@@ -815,6 +945,72 @@ export default function VanLocationPage() {
                           placeholder="e.g. @gmail.com"
                           className="w-full bg-white/5 border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white placeholder-[#7A6A5E] focus:outline-none focus:border-[#DFAB6C]"
                         />
+                      </div>
+
+                      {/* Phone Number */}
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-[#C4B4A8] mb-1">
+                          Phone Number {voiceConsent || whatsappConsent ? "*" : "(Optional)"}
+                        </label>
+                        <div className="relative">
+                          <Phone className="w-3.5 h-3.5 text-[#8C7C70] absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="tel"
+                            value={phoneNumber}
+                            onChange={(e) => {
+                              setPhoneNumber(e.target.value);
+                              if (phoneError) setPhoneError("");
+                            }}
+                            placeholder="e.g. +91 98765 43210 or 10-digit mobile"
+                            className="w-full bg-white/5 border border-white/15 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-[#7A6A5E] focus:outline-none focus:border-[#DFAB6C]"
+                          />
+                        </div>
+                        {phoneError && (
+                          <p className="text-[11px] text-red-400 mt-1 font-medium">{phoneError}</p>
+                        )}
+                      </div>
+
+                      {/* Communication Preferences & Consent */}
+                      <div className="pt-1 pb-1 space-y-2 border-t border-b border-white/10">
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-[#C4B4A8]">
+                          Communication Preferences (Optional)
+                        </label>
+
+                        {/* Voice Consent Checkbox */}
+                        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={voiceConsent}
+                            onChange={(e) => {
+                              setVoiceConsent(e.target.checked);
+                              if (!e.target.checked && !whatsappConsent) setPhoneError("");
+                            }}
+                            className="mt-0.5 rounded border-white/20 bg-white/5 text-[#DFAB6C] focus:ring-[#DFAB6C] cursor-pointer"
+                          />
+                          <span className="text-[11px] text-[#A8988B] leading-tight">
+                            <strong className="text-white block font-medium">
+                              Automated Voice Call (In-Browser Simulation)
+                            </strong>
+                            I consent to receive voice concierge assistance to confirm catering requirements and event details. <span className="text-[#DFAB6C] block mt-0.5">(Demo: In-browser simulation only — does not place real telephone calls.)</span>
+                          </span>
+                        </label>
+
+                        {/* WhatsApp Consent Checkbox */}
+                        <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={whatsappConsent}
+                            onChange={(e) => {
+                              setWhatsappConsent(e.target.checked);
+                              if (!e.target.checked && !voiceConsent) setPhoneError("");
+                            }}
+                            className="mt-0.5 rounded border-white/20 bg-white/5 text-[#DFAB6C] focus:ring-[#DFAB6C] cursor-pointer"
+                          />
+                          <span className="text-[11px] text-[#A8988B] leading-tight">
+                            <strong className="text-white block font-medium">WhatsApp Updates</strong>
+                            I consent to receive booking status updates and confirmation details via WhatsApp.
+                          </span>
+                        </label>
                       </div>
 
                       {/* Organization & Location Grid */}

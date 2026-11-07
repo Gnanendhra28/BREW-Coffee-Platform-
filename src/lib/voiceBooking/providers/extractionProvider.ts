@@ -208,13 +208,21 @@ export class MockExtractionProvider implements ExtractionProvider {
 
     // 1. Guest Count Extraction (10 - 1000)
     if (!clearedFields.includes("guestCount")) {
-      const guestMatch = lower.match(
-        /(\d+)\s*(?:guests?|people|pax|attendees|log|logon|लोग|mandiki|mandi|మంది|atithulu)?/i
+      const explicitGuestMatch = lower.match(
+        /(?:^|[^\d-])(\d{1,4})\s*(?:guests?|people|pax|attendees|log|logon|लोग|लोगों|मेहमान|मेहमानों|mandiki|mandi|మంది|atithulu|అతిథులు)/i
       );
-      if (guestMatch) {
-        const parsed = parseInt(guestMatch[1], 10);
+      if (explicitGuestMatch) {
+        const parsed = parseInt(explicitGuestMatch[1], 10);
         if (parsed >= 10 && parsed <= 1000) {
           data.guestCount = parsed;
+        }
+      } else {
+        const standaloneMatch = lower.match(/(?:^|[^\d-])(\d{2,3})(?=[^\d:-]|$)/);
+        if (standaloneMatch) {
+          const parsed = parseInt(standaloneMatch[1], 10);
+          if (parsed >= 10 && parsed <= 1000) {
+            data.guestCount = parsed;
+          }
         }
       }
     }
@@ -255,12 +263,24 @@ export class MockExtractionProvider implements ExtractionProvider {
           data.startTime = candidate;
         }
       } else {
-        const timeAmPmMatch = lower.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje|gantalu|గంటలకు|బజే)/i);
+        const timeAmPmMatch = lower.match(
+          /(?:^|[^\d-])(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje|gantulaku|gantalaku|gantaku|gantalu|గంటలకు|బజే|बजे)(?!\w)/i
+        );
         if (timeAmPmMatch) {
           let hour = parseInt(timeAmPmMatch[1], 10);
           const minute = timeAmPmMatch[2] || "00";
           const meridian = (timeAmPmMatch[3] || "").toLowerCase();
-          if (meridian === "pm" && hour < 12) hour += 12;
+          const isAfternoonEvening =
+            lower.includes("dopahar") ||
+            lower.includes("shaam") ||
+            lower.includes("madhyahnam") ||
+            lower.includes("saayanthram") ||
+            lower.includes("दोपहर") ||
+            lower.includes("शाम") ||
+            lower.includes("మధ్యాహ్నం") ||
+            lower.includes("సాయంత్రం");
+
+          if ((meridian === "pm" || isAfternoonEvening) && hour < 12) hour += 12;
           if (meridian === "am" && hour === 12) hour = 0;
           const candidate = `${hour.toString().padStart(2, "0")}:${minute}`;
           if (isValidTime24(candidate)) {
@@ -272,7 +292,7 @@ export class MockExtractionProvider implements ExtractionProvider {
 
     // 4. Duration Hours Extraction (1 - 12)
     const durationMatch = lower.match(
-      /(\d+)\s*(?:hours?|hrs?|ghante|ghanta|gantalu|ganta|గంటలు|घंटे)/i
+      /(?:^|[^\d-])(\d+)\s*(?:hours?|hrs?|ghante|ghanta|gantalu|ganta(?!laku|ku)|గంటలు|గంటల(?!కు)|घंटे|घण्टे)(?!\w)/i
     );
     if (durationMatch) {
       const hours = parseInt(durationMatch[1], 10);
@@ -282,10 +302,47 @@ export class MockExtractionProvider implements ExtractionProvider {
     }
 
     // 5. Venue Address Extraction
-    for (const hub of HYDERABAD_HUBS) {
-      if (lower.includes(hub.toLowerCase())) {
-        data.venueAddress = hub;
+    const HUB_ALIASES: Record<string, string> = {
+      "hitec city": "Hitec City",
+      "हाईटेक सिटी": "Hitec City",
+      "हैटिक सिटी": "Hitec City",
+      "హైటెక్ సిటీ": "Hitec City",
+      "gachibowli": "Gachibowli",
+      "गचीबोवली": "Gachibowli",
+      "गच्चीबाउली": "Gachibowli",
+      "గచ్చిబౌలి": "Gachibowli",
+      "jubilee hills": "Jubilee Hills",
+      "जुबली हिल्स": "Jubilee Hills",
+      "జూబ్లీ హిల్స్": "Jubilee Hills",
+      "banjara hills": "Banjara Hills",
+      "बंजारा हिल्स": "Banjara Hills",
+      "బంజారా హిల్స్": "Banjara Hills",
+      "madhapur": "Madhapur",
+      "माधापुर": "Madhapur",
+      "మాదాపూర్": "Madhapur",
+      "kondapur": "Kondapur",
+      "कोंडापुर": "Kondapur",
+      "కొండాపూర్": "Kondapur",
+      "begumpet": "Begumpet",
+      "बेगमपेट": "Begumpet",
+      "బేగంపేట్": "Begumpet",
+      "secunderabad": "Secunderabad",
+      "सिकंदराबाद": "Secunderabad",
+      "సికింద్రాబాద్": "Secunderabad",
+    };
+
+    for (const [alias, canonicalHub] of Object.entries(HUB_ALIASES)) {
+      if (lower.includes(alias)) {
+        data.venueAddress = canonicalHub;
         break;
+      }
+    }
+    if (!data.venueAddress) {
+      for (const hub of HYDERABAD_HUBS) {
+        if (lower.includes(hub.toLowerCase())) {
+          data.venueAddress = hub;
+          break;
+        }
       }
     }
     if (!data.venueAddress) {
@@ -298,13 +355,37 @@ export class MockExtractionProvider implements ExtractionProvider {
     }
 
     // 6. Event Type Extraction
-    if (lower.includes("wedding") || lower.includes("shaadi") || lower.includes("pelli")) {
+    if (
+      lower.includes("wedding") ||
+      lower.includes("shaadi") ||
+      lower.includes("शादी") ||
+      lower.includes("pelli") ||
+      lower.includes("పెళ్లి") ||
+      lower.includes("వివాహం")
+    ) {
       data.eventType = "wedding";
-    } else if (lower.includes("birthday") || lower.includes("janmadin") || lower.includes("puttinaroju")) {
+    } else if (
+      lower.includes("birthday") ||
+      lower.includes("janmadin") ||
+      lower.includes("जन्मदिन") ||
+      lower.includes("puttinaroju") ||
+      lower.includes("పుట్టినరోజు")
+    ) {
       data.eventType = "birthday";
-    } else if (lower.includes("corporate") || lower.includes("office") || lower.includes("company")) {
+    } else if (
+      lower.includes("corporate") ||
+      lower.includes("office") ||
+      lower.includes("company") ||
+      lower.includes("कॉर्पोरेट") ||
+      lower.includes("కార్పొరేట్")
+    ) {
       data.eventType = "corporate";
-    } else if (lower.includes("party") || lower.includes("gathering")) {
+    } else if (
+      lower.includes("party") ||
+      lower.includes("gathering") ||
+      lower.includes("पार्टी") ||
+      lower.includes("పార్టీ")
+    ) {
       data.eventType = "private_party";
     }
 
@@ -327,19 +408,29 @@ export class MockExtractionProvider implements ExtractionProvider {
       }
     }
 
-    // 8. Tier Selection
+    // 8. Tier Selection (English, Hindi, Telugu)
     if (
       lower.includes("classic brew") ||
+      lower.includes("classic") ||
       lower.includes("basic") ||
       lower.includes("package 1") ||
-      lower.includes("first package")
+      lower.includes("first package") ||
+      lower.includes("पहला पैकेज") ||
+      lower.includes("क्लासिक ब्रू") ||
+      lower.includes("క్లాసిక్ బ్రూ") ||
+      lower.includes("మొదటి ప్యాకేజీ")
     ) {
       data.selectedTier = "BASIC";
     } else if (
       lower.includes("artisanal signature") ||
+      lower.includes("signature") ||
       lower.includes("standard") ||
       lower.includes("package 2") ||
-      lower.includes("second package")
+      lower.includes("second package") ||
+      lower.includes("दूसरा पैकेज") ||
+      lower.includes("सिग्नेचर") ||
+      lower.includes("సిగ్నేచర్") ||
+      lower.includes("రెండవ ప్యాకేజీ")
     ) {
       data.selectedTier = "STANDARD";
     } else if (
@@ -347,7 +438,11 @@ export class MockExtractionProvider implements ExtractionProvider {
       lower.includes("vip") ||
       lower.includes("premium") ||
       lower.includes("package 3") ||
-      lower.includes("third package")
+      lower.includes("third package") ||
+      lower.includes("तीसरा पैकेज") ||
+      lower.includes("వీఐపీ") ||
+      lower.includes("మూడవ ప్యాకేజీ") ||
+      lower.includes("విఐపి")
     ) {
       data.selectedTier = "PREMIUM";
     }

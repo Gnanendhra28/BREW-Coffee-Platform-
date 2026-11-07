@@ -15,6 +15,7 @@ import {
   generateVoiceBookingQuotation,
   validateQuotationRequirements,
   classifyConfirmationIntent,
+  createQuotationSnapshot,
   GeminiExtractionProvider,
   MockExtractionProvider,
   InMemoryVoiceSessionRepository,
@@ -288,6 +289,7 @@ async function runHardeningTests() {
   confSession.state = "awaiting_customer_confirmation";
   confSession.requirements = { ...baseReqs };
   confSession.quotation = quoteA;
+  confSession.quotationSnapshot = createQuotationSnapshot(baseReqs);
   await repo.save(confSession);
 
   // Customer responds ambiguously
@@ -316,6 +318,7 @@ async function runHardeningTests() {
 
   // 5.1 Immutability check: caller's session object is NOT mutated
   const originalSession = createVoiceBookingSession("+919777888999", "en");
+  await repo.save(originalSession);
   const originalState = originalSession.state;
   const originalHistoryLength = originalSession.conversationHistory.length;
 

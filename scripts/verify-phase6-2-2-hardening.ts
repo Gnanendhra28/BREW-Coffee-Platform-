@@ -400,7 +400,7 @@ async function runPhase622HardeningTests() {
   {
     const session = await createQuotationReadySession("sess_staff_test_grp8");
     session.state = "awaiting_staff_approval";
-    await repository.save(session);
+    await repository.save(session, session.revision);
 
     let threwError = false;
     try {
@@ -423,7 +423,7 @@ async function runPhase622HardeningTests() {
   {
     const session = await createQuotationReadySession("sess_staff_test_grp9");
     session.state = "awaiting_staff_approval";
-    await repository.save(session);
+    await repository.save(session, session.revision);
 
     let threwError = false;
     try {
@@ -446,7 +446,7 @@ async function runPhase622HardeningTests() {
   {
     const session = await createQuotationReadySession("sess_staff_test_grp10");
     session.state = "awaiting_staff_approval";
-    await repository.save(session);
+    await repository.save(session, session.revision);
 
     let threwCustomerError = false;
     try {
@@ -480,7 +480,7 @@ async function runPhase622HardeningTests() {
       const sessId = `sess_staff_auth_${role}`;
       const session = await createQuotationReadySession(sessId);
       session.state = "awaiting_staff_approval";
-      await repository.save(session);
+      await repository.save(session, session.revision);
 
       const approved = await approveBookingByStaff(
         session.id,
@@ -571,7 +571,7 @@ async function runPhase622HardeningTests() {
     const sessionBefore = await repository.getById("sess_test_grp13");
     sessionBefore!.staffApprovalId = "UNTOUCHABLE_SECRET_STAFF_ID";
     sessionBefore!.requirements.customerConfirmed = false;
-    await repository.save(sessionBefore!);
+    await repository.save(sessionBefore!, sessionBefore!.revision);
 
     await processConversationTurn(
       sessionBefore!,

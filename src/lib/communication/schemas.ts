@@ -126,6 +126,13 @@ export const VoiceSessionParamsSchema = z.object({
   phoneNumber: PhoneNumberSchema,
   language: VoiceLanguageSchema,
   enquiryId: z.string().optional(),
+  idempotencyKey: z
+    .string()
+    .min(8)
+    .max(128)
+    .regex(/^[a-zA-Z0-9_-]+$/)
+    .optional(),
+  testAuthorizationId: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -153,5 +160,116 @@ export const WhatsAppTemplateParamsSchema = z.object({
   language: z.string().min(2),
   components: z.array(WhatsAppTemplateComponentSchema).default([]),
   enquiryId: z.string().optional(),
+  idempotencyKey: z
+    .string()
+    .min(8)
+    .max(128)
+    .regex(/^[a-zA-Z0-9_-]+$/)
+    .optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+/* ========================================================================== */
+/* Outbox & Transactional Delivery Schemas (Phase 6.3.3)                       */
+/* ========================================================================== */
+
+export const BookingLifecycleEventTypeSchema = z.enum([
+  "booking_created",
+  "booking_awaiting_staff_approval",
+  "booking_confirmed",
+  "booking_declined",
+  "booking_cancelled",
+  "booking_human_handoff",
+  "booking_reminder",
+]);
+
+export const DeliveryStatusSchema = z.enum([
+  "pending",
+  "processing",
+  "dispatched",
+  "blocked",
+  "failed",
+  "permanently_failed",
+]);
+
+export const CommunicationDeliveryRecordSchema = z.object({
+  id: z.string().min(8),
+  eventId: z.string().min(8),
+  sessionId: z.string().min(5),
+  officialBookingId: z.string().optional(),
+  eventType: BookingLifecycleEventTypeSchema,
+  channel: CommunicationChannelSchema,
+  purpose: z.literal("transactional_update"),
+  status: DeliveryStatusSchema,
+  phoneNumberMasked: z.string().min(6),
+  templateName: z.string().optional(),
+  templateLanguage: z.string().optional(),
+  templateParams: z.record(z.string(), z.unknown()).optional(),
+  attemptCount: z.number().int().min(0),
+  callAttemptCount: z.number().int().min(0).optional(),
+  currentAttemptId: z.string().nullable().optional(),
+  maxAttempts: z.number().int().default(3),
+  claimOwner: z.string().nullable().optional(),
+  claimToken: z.string().nullable().optional(),
+  claimedAt: IsoUtcDateTimeSchema.nullable().optional(),
+  leaseExpiresAt: IsoUtcDateTimeSchema.nullable().optional(),
+  nextRetryAt: IsoUtcDateTimeSchema.nullable().optional(),
+  lastError: z
+    .object({
+      code: z.string().optional(),
+      message: z.string(),
+      isRetryable: z.boolean(),
+      occurredAt: IsoUtcDateTimeSchema,
+      attempt: z.number().int().optional(),
+    })
+    .nullable()
+    .optional(),
+  policyResult: z
+    .object({
+      status: z.enum(["allowed", "blocked", "error"]),
+      reason: z.string(),
+      details: z.string(),
+      evaluatedAt: IsoUtcDateTimeSchema,
+    })
+    .nullable()
+    .optional(),
+  providerResult: z
+    .object({
+      providerCallId: z.string().optional(),
+      providerMessageId: z.string().optional(),
+      status: z.string(),
+      callOutcome: z.enum(["answered", "no_answer", "busy", "failed"]).optional(),
+      isSimulated: z.boolean(),
+      providerMode: z.string(),
+      completedAt: IsoUtcDateTimeSchema,
+    })
+    .nullable()
+    .optional(),
+  createdAt: IsoUtcDateTimeSchema,
+  updatedAt: IsoUtcDateTimeSchema,
+}).superRefine((data, ctx) => {
+  if (data.status === "processing") {
+    if (
+      !data.claimToken ||
+      typeof data.claimToken !== "string" ||
+      data.claimToken.trim().length === 0
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["claimToken"],
+        message:
+          "A non-empty claimToken is required whenever delivery status is 'processing'",
+      });
+    }
+  }
+});
+
+export const OutboxEventRecordSchema = z.object({
+  id: z.string().min(8),
+  sessionId: z.string().min(5),
+  officialBookingId: z.string().optional(),
+  eventType: BookingLifecycleEventTypeSchema,
+  sessionRevision: z.number().int().min(1),
+  deliveryIds: z.array(z.string().min(8)),
+  createdAt: IsoUtcDateTimeSchema,
 });

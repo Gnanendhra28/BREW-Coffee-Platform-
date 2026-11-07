@@ -97,48 +97,83 @@ export const EventQuotationSchema = z.object({
 
 export type EventQuotationOutput = z.infer<typeof EventQuotationSchema>;
 
+import { normalizePhoneNumber } from "./communication/consent";
+
 // 4b. Customer Van Catering Request Input Schema
-export const VanRequestInputSchema = z.object({
-  contact: z
-    .string()
-    .trim()
-    .min(3, "Contact must be at least 3 characters")
-    .max(150, "Contact must not exceed 150 characters")
-    .refine((val) => {
-      // Must be a valid email or a valid phone number (at least 7 digits)
-      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
-      const isPhone = /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]{7,15}$/.test(val.replace(/\s+/g, ""));
-      return isEmail || isPhone;
-    }, "Contact must be a valid email address or phone number"),
-  organization: z
-    .string()
-    .trim()
-    .min(1, "Organization / College / Host name is required")
-    .max(150, "Organization name must not exceed 150 characters"),
-  location: z
-    .string()
-    .trim()
-    .min(1, "Location / City is required")
-    .max(200, "Location must not exceed 200 characters"),
-  eventDate: z
-    .string()
-    .trim()
-    .max(100, "Date string must not exceed 100 characters")
-    .default("Flexible"),
-  crowdSize: z
-    .union([z.string().trim().max(100), z.number().int().positive()])
-    .default("Not Specified"),
-  notes: z
-    .string()
-    .trim()
-    .max(2000, "Notes must not exceed 2000 characters")
-    .default(""),
-  idempotencyKey: z
-    .string()
-    .trim()
-    .max(100)
-    .optional(),
-});
+export const VanRequestInputSchema = z
+  .object({
+    contact: z
+      .string()
+      .trim()
+      .min(3, "Contact must be at least 3 characters")
+      .max(150, "Contact must not exceed 150 characters")
+      .refine((val) => {
+        const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+        if (isEmail) return true;
+        // Phone-shaped contacts must strictly normalize to E.164
+        return Boolean(normalizePhoneNumber(val));
+      }, "Contact must be a valid email address or a valid phone number that can be normalized to E.164"),
+    phoneNumber: z
+      .string()
+      .trim()
+      .max(30, "Phone number must not exceed 30 characters")
+      .optional()
+      .nullable()
+      .refine((val) => {
+        if (!val || val.trim().length === 0) return true;
+        return Boolean(normalizePhoneNumber(val));
+      }, "Phone number must be a valid phone number that can be normalized to E.164"),
+    voiceConsent: z
+      .boolean()
+      .default(false),
+    whatsappConsent: z
+      .boolean()
+      .default(false),
+    organization: z
+      .string()
+      .trim()
+      .min(1, "Organization / College / Host name is required")
+      .max(150, "Organization name must not exceed 150 characters"),
+    location: z
+      .string()
+      .trim()
+      .min(1, "Location / City is required")
+      .max(200, "Location must not exceed 200 characters"),
+    eventDate: z
+      .string()
+      .trim()
+      .max(100, "Date string must not exceed 100 characters")
+      .default("Flexible"),
+    crowdSize: z
+      .union([z.string().trim().max(100), z.number().int().positive()])
+      .default("Not Specified"),
+    notes: z
+      .string()
+      .trim()
+      .max(2000, "Notes must not exceed 2000 characters")
+      .default(""),
+    idempotencyKey: z
+      .string()
+      .trim()
+      .max(100)
+      .optional(),
+  })
+  .refine(
+    (data) => {
+      // If either voice or WhatsApp consent is requested, a valid phone number is required
+      if (data.voiceConsent || data.whatsappConsent) {
+        const rawPhone = data.phoneNumber || data.contact;
+        const normalized = normalizePhoneNumber(rawPhone);
+        return Boolean(normalized);
+      }
+      return true;
+    },
+    {
+      message:
+        "A valid phone number (in E.164 format or 10-digit Indian mobile) is required when opting in to voice calls or WhatsApp notifications.",
+      path: ["phoneNumber"],
+    }
+  );
 
 export type VanRequestInput = z.infer<typeof VanRequestInputSchema>;
 

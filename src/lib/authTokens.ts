@@ -1,7 +1,11 @@
 // Secure Web Crypto-based Session Token Generator and Verifier
 // Compatible with Next.js Edge Middleware, Server Components, Route Handlers, and Client.
 
-export type UserRole = "customer" | "barista" | "fleet_admin";
+export const VALID_USER_ROLES = ["customer", "barista", "fleet_admin", "admin"] as const;
+export type UserRole = (typeof VALID_USER_ROLES)[number];
+
+export const PRIVILEGED_STAFF_ROLES = ["barista", "fleet_admin", "admin"] as const;
+export type PrivilegedStaffRole = (typeof PRIVILEGED_STAFF_ROLES)[number];
 
 export interface SessionPayload {
   uid: string;
@@ -104,8 +108,9 @@ export async function createSessionToken(
   }
 ): Promise<string> {
   const sid =
-    user.sid ||
-    `sess_${Date.now()}_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 6)}`;
+    user.sid !== undefined
+      ? user.sid
+      : `sess_${Date.now()}_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 6)}`;
 
   const payload: SessionPayload = {
     uid: user.uid,
@@ -156,13 +161,37 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
     if (!isValid) return null;
 
     const payloadStr = base64UrlDecode(encodedPayload);
-    const payload = JSON.parse(payloadStr) as SessionPayload;
+    const payload = JSON.parse(payloadStr) as Partial<SessionPayload>;
 
-    if (Date.now() > payload.expiresAt) {
+    // 1. Mandatory structural checks
+    if (!payload || typeof payload !== "object") {
+      return null;
+    }
+
+    if (!payload.uid || typeof payload.uid !== "string" || payload.uid.trim().length === 0) {
+      return null;
+    }
+
+    // 2. Strict UserRole validation: reject unknown, malformed, or missing roles
+    if (!payload.role || !VALID_USER_ROLES.includes(payload.role as UserRole)) {
+      return null;
+    }
+
+    // 3. Expiration verification
+    if (typeof payload.expiresAt !== "number" || Date.now() > payload.expiresAt) {
       return null; // Expired
     }
 
-    return payload;
+    // 4. Privileged Session Enforcement:
+    // Any privileged staff session (barista, fleet_admin, admin) strictly requires a non-empty session ID (sid).
+    // Privileged tokens without a valid session ID cannot be tracked or revoked and must be rejected.
+    if (payload.role !== "customer") {
+      if (!payload.sid || typeof payload.sid !== "string" || payload.sid.trim().length === 0) {
+        return null;
+      }
+    }
+
+    return payload as SessionPayload;
   } catch {
     return null;
   }

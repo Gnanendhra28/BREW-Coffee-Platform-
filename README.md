@@ -1,4 +1,4 @@
-# ☕ BREW — Luxury Mobile Coffee Van & Outlet on Wheels
+# ☕ BREW Coffee — Multilingual Voice Booking & Event Catering Platform
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.3.5-black?style=flat&logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.2.8-blue?style=flat&logo=react)](https://react.dev/)
@@ -7,144 +7,280 @@
 [![Firebase](https://img.shields.io/badge/Firebase-v12-FFCA28?style=flat&logo=firebase)](https://firebase.google.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)]()
 
-> **BREW** is a luxury artisanal coffee outlet on wheels. Designed for modern mobile coffee vans and trucks, it connects street-side customers, outdoor digital queue boards, mobile kitchen baristas, and an autonomous fleet operations AI engine into a seamless ecosystem.
+> A full-stack artisanal mobile coffee platform with an AI-powered, multilingual browser voice booking concierge. Customers can describe their event in English, Hindi, or Telugu, receive deterministic package quotations, and submit booking requests for staff approval.
+
+**Project Status:** Prototype Completed — Phases P1 to P8  
+**Prototype Additional Cost:** $0.00 (Zero paid external voice or cloud speech services)  
+**Primary Region:** Hyderabad, India  
+**Automated Verification:** 118 / 118 top-level test executions passed across P1–P8 suites
 
 ---
 
-## 🌟 Architecture & Workflow
+## 🌟 Overview
 
-```mermaid
-flowchart LR
-    A["Customer at Van / Street"] -->|"1. Scan QR on Outdoor Board"| B["Mobile Menu (/menu)"]
-    B -->|"2. Choose Items & Curbside/Walkup"| C["Cart & Checkout (/cart)"]
-    C -->|"3. Instant Ticket Transmission"| D["Barista KDS (/barista)"]
-    D -->|"4. Progress: Brewing -> Ready"| E["Outdoor Board (/board)"]
-    D -->|"5. Push Buzzer Notification"| F["Live Digital Buzzer (/order-status/[id])"]
+BREW Coffee connects street-side customers, outdoor digital queue boards, mobile kitchen baristas, and an autonomous fleet operations AI engine with a browser-native voice booking concierge.
+
+Instead of filling out static booking forms, customers can speak naturally with the concierge. The system progressively collects event requirements, validates logistical feasibility, calculates deterministic quotations across three service tiers, and submits the request for staff review.
+
+The booking workflow implements a strict **human-in-the-loop** architecture:
+1. Customer discusses event details and explicitly confirms quotation selection.
+2. The booking enters `awaiting_staff_approval`.
+3. Authorized staff inspects route feasibility, ingredient allocations, and quotation HMAC integrity.
+4. Staff approves or rejects the booking request.
+5. The customer's live dashboard updates automatically via sanitized projections.
+
+The prototype executes browser-native Web Speech APIs (`SpeechRecognition` / `SpeechSynthesis`) at zero additional cost, without invoking paid external telephony (Exotel) or cognitive speech APIs (Azure).
+
+---
+
+## 🚀 Key Features
+
+### 1. Multilingual Voice Booking Concierge
+- **Supported Languages**: English (India), Hindi (`hi-IN`), and Telugu (`te-IN`).
+- **Browser-Native Audio**: In-browser speech recognition and synthesis.
+- **Conversation Modes**: Push-to-Talk and Hands-Free Continuous Voice.
+- **Speech Controls**: Real-time transcript display, barge-in interruption, mute/unmute, and clean pause/resume controls.
+- **Accessible Fallback**: Full-featured text-chat input available when microphone permissions are denied or unsupported.
+- **Robust Extraction**: Supports Devanagari script, Telugu script, and Romanized Hinglish/Tenglish inputs.
+
+### 2. Conversational Requirement Collection
+The concierge progressively collects and validates all five mandatory booking parameters:
+1. **Guest Count** (10–1,000 guests)
+2. **Event Date** (valid future calendar date)
+3. **Start Time** (06:00–23:00)
+4. **Duration** (1–12 hours, within operating-day boundary)
+5. **Venue Address** (serviceable Hyderabad operational radius)
+
+### 3. Deterministic Quotation Engine
+Quotation pricing is calculated mathematically using deterministic formulas rather than relying on generative model hallucinations:
+
+| Catering Package | Price per Guest | Service Level & Equipment |
+|---|---:|---|
+| **Classic Brew** | ₹180 / guest | Handcrafted espresso bar, single-origin brews, teas, 1 dedicated barista |
+| **Artisanal Signature** *(Recommended)* | ₹260 / guest | Full specialty espresso bar, whole milk & oat milk bar, fresh pastries, 2 baristas |
+| **VIP Unlimited Bar** | ₹360 / guest | Unlimited specialty coffees, Belgian shakes, complete bakery spread, 3-barista crew |
+
+### 4. Cryptographic Quotation Integrity Gate
+- Quotations are converted into canonical material snapshots signed via **HMAC-SHA256**.
+- Seven immutable pricing variables are bound to the signature.
+- Dual-secret verification supports seamless server-side secret rotation (`QUOTATION_SNAPSHOT_SECRET` + `QUOTATION_SNAPSHOT_PREVIOUS_SECRET`).
+- Staff approval verifies the HMAC snapshot fail-closed before confirming any reservation.
+
+### 5. Staff Review & Role-Based Access Control (RBAC)
+- Authorized staff roles: `barista`, `fleet_admin`, and `admin`.
+- Filter bookings by `pending`, `approved`, `rejected`, or `all`.
+- View complete turn history, language used, and material quote breakdown.
+- Verify cryptographic quotation integrity prior to slot reservation.
+- Rejection audits record timestamps, staff identity, and customer-facing reasons.
+- Server-side cryptographic token verification (`brew_session` HTTP-only cookie).
+
+### 6. Customer Privacy & Sanitization
+- Customer projections use `toSafeCustomerVoiceSessionView`.
+- Strips unmasked phone numbers, internal staff notes, staff UIDs, and provider secrets.
+- Prevents internal operations data from leaking to customer-facing client browsers.
+
+---
+
+## 🏛️ Architecture
+
+```text
+Customer Browser (Mobile / Desktop)
+      │
+      ├──> Web Speech API (Recognition & Synthesis) ──┐
+      └──> Accessible Text Chat Fallback ────────────┤
+                                                     │
+                                                     ▼
+                                        Next.js App Router API
+                                         /api/voice-booking/*
+                                                     │
+                                                     ▼
+                                            Conversation Engine
+                                                     │
+                             ┌───────────────────────┼───────────────────────┐
+                             ▼                       ▼                       ▼
+                     Entity Extraction       Validation Policy       Session Repository
+                             │                       │                       │
+                             └───────────────────────┼───────────────────────┘
+                                                     │
+                                                     ▼
+                                         Quotation Pricing Engine
+                                                     │
+                                                     ▼
+                                          HMAC-SHA256 Snapshot Gate
+                                                     │
+                                                     ▼
+                                           Customer Confirmation
+                                                     │
+                                                     ▼
+                                          awaiting_staff_approval
+                                                     │
+                                                     ▼
+                                           Barista KDS Dashboard
+                                            (/barista & /admin)
+                                                     │
+                                       ┌─────────────┴─────────────┐
+                                       ▼                           ▼
+                                    Approve                      Reject
+                                       │                           │
+                                       └─────────────┬─────────────┘
+                                                     │
+                                                     ▼
+                                         Safe Customer Projection
+                                          (/voice-booking/[id])
 ```
 
-1. **Outdoor Digital Display Board (`/board`)**: Mounted on the exterior of the van with high contrast daylight styling, live tokens for "Now Serving" vs "Brewing Now", wait times, and a canvas-based scannable QR code.
-2. **Barista Kitchen Display System (`/barista`)**: The touch KDS inside the van featuring incoming audio chimes, 1-tap ticket progression, curbside vehicle runner notes, and an instant 86/sold-out inventory toggle drawer.
-3. **Customer Live Digital Buzzer (`/order-status/[id]`)**: Replaces vibrating restaurant pagers with a progressive web app digital buzzer featuring live circular progress rings, haptic vibration, and audio alerts.
-4. **Curbside & Window Checkout (`/cart`)**: Allows guests parked nearby in cars to specify vehicle details for runner delivery.
-5. **Van Station & Schedule Tracker (`/location`)**: Shows today's GPS spot, hours, directions, vehicle equipment specs, and weekly itinerary.
+### Technology Stack
+
+| Layer | Technologies & Implementations |
+|---|---|
+| **Frontend Framework** | Next.js 16 (App Router), React 19, TypeScript 5, Tailwind CSS |
+| **Conversational Voice** | Web Speech API (`SpeechRecognition`, `SpeechSynthesis`), Audio Fallbacks |
+| **Backend & Routing** | Next.js API Route Handlers (`force-dynamic`), Streaming JSON Guards |
+| **Quotation & Logic** | Deterministic formulas, ingredient manifests, logistics matrices |
+| **Cryptographic Security** | HMAC-SHA256 quote snapshots, JWT HMAC auth cookies, timing-safe equality |
+| **Persistence Layer** | Singleton in-memory development repository (`globalThis`), Cloud Firestore |
+| **Authorization** | Server-side role checks (`barista`, `fleet_admin`), PIN authentication |
 
 ---
 
-## 🤖 Autonomous Operations Multi-Agent Engine
+## 📱 Application Routes
 
-BREW integrates 6 specialized autonomous operations AI agents powered by `src/lib/smartAgentsEngine.ts`:
+### Customer Interfaces
+- `/voice-booking` — Multilingual voice booking launcher & session start
+- `/voice-booking/[id]` — Interactive voice concierge console (live transcript, quote cards, confirmation)
+- `/location` — Mobile coffee van live GPS locator & web catering booking form
+- `/menu` — Mobile artisanal beverage menu
+- `/board` — Outdoor van queue display board
 
-1. **🛡️ Inventory Sentinel**: Live auto-deduction of coffee beans (kg), milk (L), paper cups, and bakery pastries with every order. Analyzes burn rates and generates predictive stockout alerts with 1-click van restocking.
-2. **🚗 Curbside Drive-Thru Expediter**: Interactive customer check-in (*"I'm 2 mins away" / "I'm at the curb"*) that syncs espresso shot extraction timing with car arrival for sub-60s window handovers.
-3. **⚡ Yield Optimizer (Flash Deals)**: Late afternoon perishable waste prevention flash bundles (e.g., 25% off Cappuccino + Cinnamon Roll) toggled from the KDS with a live customer banner on `/` and `/menu`.
-4. **🎪 Event Booking Concierge**: Automated instant 3-tier catering quotations (*Classic Brew, Artisanal Signature, VIP Unlimited Bar*) with ingredient allocations for corporate & campus bookings.
-5. **📢 Hyper-Local Hype Broadcaster**: Auto-generates localized social copy (WhatsApp Status, Instagram Story, SMS) tailored to today's active parking spot and weather conditions.
-6. **❤️ Guest Sentiment Guardian**: Detects customer reviews with rating ≤ 3 stars, creates a personalized Head Barista apology, and auto-issues a ₹50 recovery credit voucher (`BREWCARExxxx`) redeemable in the cart.
+### Staff & Operations Interfaces
+- `/barista` — Kitchen Display System (KDS) & Voice Booking Approval Manager
+- `/admin` — Fleet operations, live outbox worker metrics & booking audits
+- `/login` — Secure staff authentication portal
+
+### Voice Booking API Endpoints
+- `POST /api/voice-booking/session` — Initialize a new voice booking session
+- `GET /api/voice-booking/session?sessionId=...` — Retrieve sanitized session view
+- `GET /api/voice-booking/session/[id]` — Retrieve session view by path parameter
+- `POST /api/voice-booking/chat` — Submit a conversational speech or text turn
+- `POST /api/voice-booking/approve` — Process authorized staff approval
+- `POST /api/voice-booking/reject` — Process authorized staff rejection
+- `GET /api/voice-booking/sessions` — Protected staff query for booking list
 
 ---
 
-## 🚀 Quick Start
+## 🛠️ Local Installation & Setup
 
-### 1. Prerequisites
-- Node.js `v20.x` or higher
-- npm / pnpm / yarn
+### Prerequisites
+- Node.js `20.x` or higher
+- npm `10.x` or higher
 
-### 2. Installation
+### 1. Clone & Install
 ```bash
-git clone https://github.com/your-org/brew.git
-cd brew
+git clone https://github.com/Gnanendhra28/BREW-Coffee-Platform-.git
+cd BREW-Coffee-Platform-
 npm install
 ```
 
-### 3. Environment Setup
-Copy the example environment file:
+### 2. Environment Configuration
+Copy the configuration template:
 ```bash
 cp .env.example .env.local
 ```
-Fill in your Firebase credentials in `.env.local` (or leave empty to use the built-in demo auth mode).
 
-### 4. Run Development Server
+Configure your environment variables in `.env.local`:
+```bash
+# General
+NODE_ENV="development"
+PORT="3000"
+NEXT_PUBLIC_SITE_URL="http://localhost:3000"
+
+# Prototype Safety & Zero-Cost Telephony Invariant
+VOICE_BOOKING_ENABLED="false"
+VOICE_PROTOTYPE_MODE="true"
+NEXT_PUBLIC_VOICE_PROTOTYPE_MODE="true"
+
+# Contact & Business Email
+BUSINESS_EMAIL="catering@brewcoffee.in"
+NEXT_PUBLIC_BUSINESS_EMAIL="catering@brewcoffee.in"
+
+# Authentication & Quotation Secrets (min 32 characters)
+AUTH_SECRET="brew-platform-secure-jwt-hmac-secret-key-2026"
+QUOTATION_SNAPSHOT_SECRET="brew-platform-secure-quotation-hmac-key-2026"
+
+# Development Staff PINs (Local demonstration only)
+BARISTA_PIN="2026"
+FLEET_ADMIN_PIN="7788"
+```
+
+> **Security Note:** Never commit `.env.local` or genuine production secrets. In production, dev PINs (`2026`, `7788`) fail closed and are strictly rejected.
+
+### 3. Run Development Server
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000/voice-booking](http://localhost:3000/voice-booking) to launch the voice concierge.
 
 ---
 
-## 🛠️ Production Build & Verification
+## 🧪 Verification & Test Suites
+
+BREW Coffee includes phase-specific verification suites covering the entire customer-to-staff lifecycle:
 
 ```bash
-# 1. Type check
-npx tsc --noEmit
+# TypeScript Typecheck
+npm run typecheck
 
-# 2. Linting check (0 errors, 0 warnings)
+# Code Quality & Linter
 npm run lint
 
-# 3. Production build
-npm run build
-
-# 4. Start production server
-npm start
+# Phase-Specific Prototype Test Suites
+npm run test:p1  # Free Prototype Foundation & Zero-Cost Isolation (10 tests)
+npm run test:p2  # Interactive Browser Voice UI & Speech Integration (9 tests)
+npm run test:p3  # AI Voice Conversation & Multilingual Dialogue (10 tests)
+npm run test:p4  # Booking Extraction & Deterministic Quotation (20 tests)
+npm run test:p5  # Staff Approval & RBAC Boundaries (25 tests)
+npm run test:p6  # Customer Booking Experience & Visibility (8 tests)
+npm run test:p7  # End-to-End Quality Assurance & Boundary Scenarios (28 tests)
+npm run test:p8  # Demo Readiness & Presentation Verification (8 tests)
 ```
 
----
-
-## 📱 Routes & Features
-
-| Route | Name | Target Device / User |
-| :--- | :--- | :--- |
-| `/` | **Home & 3D Brand Showcase** | Public / Desktop & Mobile |
-| `/menu` | **Artisanal Handcrafted Menu** | Public / Smartphone |
-| `/location` | **Where Is Our Van Today?** | Public / Smartphone |
-| `/cart` | **Dedicated Cart & Curbside Checkout** | Public / Smartphone |
-| `/order-status/[id]` | **Customer Live Digital Buzzer** | Public / Smartphone |
-| `/board` | **Outdoor Digital Display Board** | Van Exterior Screen / Kiosk |
-| `/barista` | **Barista Kitchen Display System** | Van Interior Tablet |
-| `/sitemap.xml` | **Dynamic XML Sitemap** | Search Engine Crawlers |
-| `/robots.txt` | **Crawler Directives** | Search Engine Crawlers |
-| `/manifest.webmanifest` | **PWA Web App Manifest** | Mobile / Tablet PWA Install |
+**Automated Test Status:** **118 / 118 passed (100% pass rate, 0 errors).**
 
 ---
 
-## 🔒 Security & Headers
+## 🎬 5-Minute Demonstration Walkthrough
 
-The application includes hardened production security headers configured in `next.config.ts`:
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: SAMEORIGIN`
-- `Referrer-Policy: strict-origin-when-cross-origin`
-- `Permissions-Policy: camera=(), microphone=(), geolocation=(self)`
+1. **Launch**: Navigate to `/voice-booking` and select **English**, **Hindi**, or **Telugu**.
+2. **Speak or Type**: State event requirements:
+   > *"I need coffee catering for 75 guests on December 20th in Banjara Hills, starting at 2 PM for 4 hours."*
+3. **Inspect Progress**: Observe the live requirement checklist update to **5 / 5 Mandatory Fields Collected**.
+4. **Compare Quotations**: Review the 3 tier cards (*Classic Brew*, *Artisanal Signature*, *VIP Unlimited Bar*).
+5. **Confirm**: Confirm your selected tier (*"Confirm Artisanal Signature"*). The booking transitions to `awaiting_staff_approval`.
+6. **Staff Review**: Navigate to `/barista` and log in with the demo staff PIN (`2026`).
+7. **Inspect & Approve**: Click on the pending inquiry, verify the **HMAC Quotation Signature**, and click **Approve Booking Request**.
+8. **Customer View**: Return to the customer booking tab to see the live status update to **Confirmed & Approved**.
 
 ---
 
-## 🚢 Deployment
+## 🔒 Security & Engineering Best Practices
 
-### Deploy on Vercel
-1. Push your repository to GitHub / GitLab / Bitbucket.
-2. Import your repository into [Vercel](https://vercel.com).
-3. Set your environment variables from `.env.example`.
-4. Deploy! Next.js will automatically detect build configurations and prerender static pages.
+- **Zero-Cost Guarantees**: `VOICE_BOOKING_ENABLED=false` prevents real outbound carrier calls.
+- **Fail-Closed RBAC**: Client requests cannot forge staff approval roles; all permissions are verified via cryptographic HTTP-only session tokens.
+- **HMAC Snapshot Integrity**: Any tampering with guest counts, dates, tier IDs, or total pricing invalidates the cryptographic signature and blocks approval.
+- **Safe Development Isolation**: In-memory repository is anchored to `globalThis` to prevent chunk isolation in Next.js development without exposing prototype state in production.
+- **Timing-Safe Equality**: HMAC signatures and security tokens use `crypto.timingSafeEqual` to prevent timing attacks.
 
-### Deploy with Docker
-```dockerfile
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
+---
 
-FROM node:20-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/node_modules ./node_modules
-EXPOSE 3000
-CMD ["npm", "start"]
-```
+## 📋 Prototype Limitations & Production Deployment Notes
+
+- **Web Speech API Availability**: Browser speech recognition (`webkitSpeechRecognition`) requires a supported browser (Google Chrome, Microsoft Edge, Safari) and an active microphone.
+- **Offline Speech**: Browser speech recognition may rely on browser-vendor cloud speech models and is not guaranteed to operate offline.
+- **Development vs. Production Storage**: The development singleton `InMemoryVoiceSessionRepository` provides local zero-cost persistence. Genuine multi-instance production environments require durable datastores (Google Cloud Firestore).
+- **Telephony**: Live PSTN telephone calling (Exotel) and Azure Cognitive Services remain disabled in prototype mode.
 
 ---
 
 ## 📄 License
-MIT © BREW Coffee Co.
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

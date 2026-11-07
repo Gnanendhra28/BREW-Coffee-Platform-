@@ -32,6 +32,11 @@ rules_version = '2';
 //   - payment_orders: Server-authoritative order ledger
 //   - processed_webhooks: Webhook deduplication store
 //   - revoked_sessions: Durable token revocation store
+//   - voice_booking_sessions: Server-authoritative voice booking sessions
+//   - booking_communication_outbox: Server-authoritative transactional outbox
+//   - customer_consent_records: Server-authoritative customer consent records (TRAI/DND)
+//   - dnd_suppression_records: Server-authoritative DND suppression ledger
+//   - dnd_audit_events: Server-authoritative DND compliance audit logs
 // ===============================================================
 
 service cloud.firestore {
@@ -162,6 +167,31 @@ service cloud.firestore {
 
     // Revoked Sessions: Durable token revocation ledger
     match /revoked_sessions/{sid} {
+      allow read, write: if false;
+    }
+
+    // Voice Booking Sessions: Server-Authoritative Voice Engine Sessions (/api/voice-booking/*)
+    match /voice_booking_sessions/{sessionId} {
+      allow read, write: if false;
+    }
+
+    // Booking Communication Outbox: Server-Authoritative Transactional Outbox (Phase 6.3.3)
+    match /booking_communication_outbox/{deliveryId} {
+      allow read, write: if false;
+    }
+
+    // Customer Consent Records: Server-Authoritative Consent Ledger (Phase 6)
+    match /customer_consent_records/{consentId} {
+      allow read, write: if false;
+    }
+
+    // DND Suppression Records: Server-Authoritative Suppression Registry (Phase 6)
+    match /dnd_suppression_records/{dndId} {
+      allow read, write: if false;
+    }
+
+    // DND Audit Events: Server-Authoritative Compliance Audit Trail (Phase 6)
+    match /dnd_audit_events/{auditId} {
       allow read, write: if false;
     }
   }

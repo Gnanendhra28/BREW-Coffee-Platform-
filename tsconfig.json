@@ -20,7 +20,8 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "server-only": ["./node_modules/next/dist/compiled/server-only/empty.js"]
     }
   },
   "include": [

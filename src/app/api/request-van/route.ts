@@ -11,6 +11,20 @@ import { isSessionRevoked } from "../../../lib/sessionRevocation";
 import { maskContact } from "../../../lib/observability/logger";
 import { getAdminFirestore } from "../../../lib/firebaseAdmin";
 import { readBoundedJson } from "../../../lib/boundedBody";
+import {
+  createConsentRecord,
+  normalizePhoneNumber,
+} from "../../../lib/communication/consent";
+import { CUSTOMER_CONSENT_COLLECTION } from "../../../lib/communication/repositories/firestoreConsentRepository";
+import {
+  OUTBOX_COLLECTION,
+  serializeSessionForFirestore,
+  VOICE_BOOKING_COLLECTION,
+} from "../../../lib/voiceBooking/repositories/firestoreSessionRepository";
+import { createOutboxDeliveriesForTransition } from "../../../lib/communication/outbox/outboxModel";
+import { isValidCalendarDate } from "../../../lib/voiceBooking/schemas";
+import { VoiceBookingSession } from "../../../lib/voiceBooking/types";
+import { getVoiceSessionRepository } from "../../../lib/voiceBooking/conversationEngine";
 
 const BUSINESS_EMAIL = process.env.BUSINESS_EMAIL || "mattag@iitbhilai.ac.in";
 const IDEMPOTENCY_FILE_PATH = path.join(process.cwd(), "src/data/idempotency_records.json");
@@ -139,17 +153,50 @@ export async function POST(req: NextRequest) {
       eventDate,
       crowdSize,
       notes,
+      phoneNumber,
+      voiceConsent,
+      whatsappConsent,
       idempotencyKey: clientProvidedKey,
     } = validationResult.data;
+
+    // Phone normalization & contact field handling:
+    // 1. Preserve email-valued contact exactly.
+    // 2. When contact contains a phone number, normalize it to E.164 so raw phone input is not persisted.
+    // 3. Keep the separate phoneNumber field as the authoritative phone contact when supplied.
+    const isContactEmail = contact.includes("@");
+    const normalizedContactPhone = !isContactEmail ? normalizePhoneNumber(contact) : null;
+    const normalizedSuppliedPhone = phoneNumber ? normalizePhoneNumber(phoneNumber) : null;
+
+    // Fail closed: Reject phone-shaped contacts that cannot be normalized
+    if (!isContactEmail && !normalizedContactPhone) {
+      return NextResponse.json(
+        { error: "Invalid contact phone number. Unable to normalize to E.164 format." },
+        { status: 400 }
+      );
+    }
+
+    // Fail closed: Reject separate phone numbers that cannot be normalized
+    if (phoneNumber && !normalizedSuppliedPhone) {
+      return NextResponse.json(
+        { error: "Invalid phoneNumber. Unable to normalize to E.164 format." },
+        { status: 400 }
+      );
+    }
+
+    const persistedContact = isContactEmail
+      ? contact.trim()
+      : normalizedContactPhone!;
+
+    const authoritativePhone = normalizedSuppliedPhone || normalizedContactPhone || null;
 
     // 5. Server-Side Idempotency Protection
     cleanupIdempotencyStore();
 
-    // Fingerprint combines contact, organization, location, eventDate, crowdSize
+    // Fingerprint combines persisted contact, organization, location, eventDate, crowdSize, phone & consent choices
     const payloadFingerprint = crypto
       .createHash("sha256")
       .update(
-        `${contact.toLowerCase().trim()}|${organization.toLowerCase().trim()}|${location.toLowerCase().trim()}|${eventDate.toLowerCase().trim()}|${String(crowdSize)}`
+        `${persistedContact.toLowerCase()}|${organization.toLowerCase().trim()}|${location.toLowerCase().trim()}|${eventDate.toLowerCase().trim()}|${String(crowdSize)}|${authoritativePhone || ""}|${Boolean(voiceConsent)}|${Boolean(whatsappConsent)}`
       )
       .digest("hex");
 
@@ -210,7 +257,7 @@ export async function POST(req: NextRequest) {
       eventDate,
     });
 
-    const maskedContact = maskContact(contact);
+    const maskedContact = maskContact(persistedContact);
     console.log("==================================================");
     console.log(`🚐 NEW VAN LOCATION REQUEST FOR: ${BUSINESS_EMAIL}`);
     console.log(`Contact: ${maskedContact}`);
@@ -233,7 +280,7 @@ export async function POST(req: NextRequest) {
 NEW MOBILE VAN LOCATION REQUEST
 ----------------------------------------
 Target Email: ${BUSINESS_EMAIL}
-Requester Contact: ${contact}
+Requester Contact: ${persistedContact}
 Organization / Campus: ${organization}
 Location / City: ${location}
 Estimated Date: ${eventDate}
@@ -255,7 +302,42 @@ ${quotation.tiers
   )
   .join("\n")}
 ----------------------------------------
-Respond directly to the customer at ${contact}.
+${
+  isContactEmail
+    ? `Respond directly to the customer at ${persistedContact}.`
+    : `Call the customer directly at ${authoritativePhone || persistedContact}.`
+}
+`;
+
+    const publicTextContent = isContactEmail
+      ? textContent
+      : `
+NEW MOBILE VAN LOCATION REQUEST
+----------------------------------------
+Target Email: ${BUSINESS_EMAIL}
+Requester Contact: ${maskedContact}
+Organization / Campus: ${organization}
+Location / City: ${location}
+Estimated Date: ${eventDate}
+Crowd Size: ${crowdSize}
+Notes: ${notes || "None"}
+Received: ${timestamp}
+----------------------------------------
+AI EVENT CONCIERGE INSTANT QUOTATION:
+Baristas Assigned: ${quotation.baristasAssigned} crew
+Beans Allocation: ${quotation.ingredientAllocation.coffeeBeansKg} kg
+Cups Allocation: ${quotation.ingredientAllocation.cupsCount} cups
+TIER OPTIONS:
+${quotation.tiers
+  .map(
+    (t) =>
+      `• ${t.name} (₹${t.pricePerGuest}/guest) -> Total: ₹${t.totalAmount.toLocaleString(
+        "en-IN"
+      )} [${t.perks.join(", ")}]`
+  )
+  .join("\n")}
+----------------------------------------
+Call the customer directly at ${maskedContact}.
 `;
 
     const htmlContent = `
@@ -286,7 +368,7 @@ Respond directly to the customer at ${contact}.
 
     <div class="row">
       <span class="label">Requester Contact:</span>
-      <span class="value">${contact}</span>
+      <span class="value">${persistedContact}</span>
     </div>
 
     <div class="row">
@@ -376,9 +458,13 @@ Respond directly to the customer at ${contact}.
 
     <div class="footer">
       <p>Business Destination: <strong>${BUSINESS_EMAIL}</strong></p>
-      <a href="mailto:${contact}?subject=Re: BREW Mobile Van Request at ${encodeURIComponent(
-      organization
-    )}" class="btn">Reply to Customer</a>
+      ${
+        isContactEmail
+          ? `<a href="mailto:${persistedContact}?subject=Re: BREW Mobile Van Request at ${encodeURIComponent(
+              organization
+            )}" class="btn">Reply to Customer</a>`
+          : `<a href="tel:${authoritativePhone || persistedContact}" class="btn">Call Customer (${authoritativePhone || persistedContact})</a>`
+      }
     </div>
   </div>
 </body>
@@ -413,7 +499,7 @@ Respond directly to the customer at ${contact}.
         await transporter.sendMail({
           from: `"BREW Van Dispatch" <${smtpUser}>`,
           to: BUSINESS_EMAIL,
-          replyTo: contact.includes("@") ? contact : undefined,
+          replyTo: isContactEmail ? persistedContact : undefined,
           subject,
           text: textContent,
           html: htmlContent,
@@ -426,14 +512,14 @@ Respond directly to the customer at ${contact}.
       }
     }
 
-    // Direct Gmail Web compose URL & standard mailto URL
+    // Direct Gmail Web compose URL & standard mailto URL (uses publicTextContent to ensure zero phone exposure in public responses)
     const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
       BUSINESS_EMAIL
-    )}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(textContent)}`;
+    )}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(publicTextContent)}`;
 
     const mailtoUrl = `mailto:${BUSINESS_EMAIL}?subject=${encodeURIComponent(
       subject
-    )}&body=${encodeURIComponent(textContent)}`;
+    )}&body=${encodeURIComponent(publicTextContent)}`;
 
     const requestId = `enq_${payloadFingerprint.slice(0, 32)}`;
 
@@ -444,14 +530,24 @@ Respond directly to the customer at ${contact}.
     // Check for simulated failure header (for automated resilience testing)
     const simulateDbFailure = req.headers.get("x-simulate-db-failure") === "true";
 
+    const sessionId = `vbs_${requestId}`;
+    const nowIso = new Date().toISOString();
+    const isIsoDate = isValidCalendarDate(eventDate);
+    const validEventDate = isIsoDate ? eventDate : null;
+
     const requestRecord = {
       id: requestId,
-      contact,
+      contact: persistedContact,
       organization,
       location,
       eventDate,
       crowdSize,
       notes,
+      phoneNumber: authoritativePhone,
+      voiceConsent: Boolean(voiceConsent),
+      whatsappConsent: Boolean(whatsappConsent),
+      voiceSessionId: voiceConsent && authoritativePhone ? sessionId : null,
+      source: voiceConsent && authoritativePhone ? "voice_booking" : "web_catering_enquiry",
       timestamp,
       businessEmail: BUSINESS_EMAIL,
       emailSent,
@@ -462,19 +558,158 @@ Respond directly to the customer at ${contact}.
       createdAt: Date.now(),
     };
 
+    // Prepare initial linked voice booking session if voice consent is explicitly granted
+    let initialVoiceSession: VoiceBookingSession | null = null;
+    let serializedSession: Record<string, unknown> | null = null;
+    let outboxDeliveries: ReturnType<typeof createOutboxDeliveriesForTransition> = [];
+
+    if (voiceConsent && authoritativePhone) {
+      const missingFields = [
+        "guestCount",
+        "startTime",
+        "durationHours",
+        "selectedTier",
+      ];
+      if (!validEventDate) {
+        missingFields.push("eventDate");
+      }
+
+      initialVoiceSession = {
+        id: sessionId,
+        phoneNumber: authoritativePhone,
+        language: "en",
+        state: "created",
+        requirements: {
+          guestCount: null,
+          eventDate: validEventDate,
+          startTime: null,
+          durationHours: null,
+          venueAddress: location && location.trim().length >= 3 ? location.trim() : null,
+          eventType: organization && organization.trim().length >= 1 ? organization.trim() : null,
+          beveragePreferences: [],
+          selectedTier: null,
+          handoffRequested: false,
+          customerConfirmed: false,
+          confidenceScore: 0,
+          missingFields,
+          unresolvedQuestions: [],
+          corrections: [],
+        },
+        quotation: null,
+        quotationSnapshot: null,
+        conversationHistory: [],
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        revision: 1,
+        staffApprovalId: null,
+        staffApprovalAudit: null,
+        officialBookingId: requestId,
+        metadata: {
+          source: "web_catering_enquiry",
+          enquiryRequestId: requestId,
+          officialBookingId: requestId,
+          contact: persistedContact,
+          organization,
+          crowdSizeEstimate: crowdSize,
+          rawEventDate: eventDate,
+          notes: notes || null,
+          webQuotationTier:
+            quotation.tiers.find((t) => t.isRecommended)?.name ||
+            quotation.tiers[0]?.name ||
+            null,
+        },
+      };
+
+      serializedSession = serializeSessionForFirestore(initialVoiceSession);
+      outboxDeliveries = createOutboxDeliveriesForTransition(initialVoiceSession, nowIso);
+    }
+
+    // Prepare consent records for durable storage
+    let voiceConsentRecord: ReturnType<typeof createConsentRecord> | null = null;
+    if (voiceConsent && authoritativePhone) {
+      voiceConsentRecord = createConsentRecord({
+        phoneNumber: authoritativePhone,
+        channel: "voice",
+        purpose: "transactional_update",
+        consentText:
+          "I consent to receiving outbound phone calls from BREW Coffee regarding this catering enquiry and booking details.",
+        consentVersion: "v1.0",
+        enquiryId: requestId,
+        timestamp: nowIso,
+      });
+      voiceConsentRecord.id = `consent_${requestId}_voice`;
+    }
+
+    let waConsentRecord: ReturnType<typeof createConsentRecord> | null = null;
+    if (whatsappConsent && authoritativePhone) {
+      waConsentRecord = createConsentRecord({
+        phoneNumber: authoritativePhone,
+        channel: "whatsapp",
+        purpose: "transactional_update",
+        consentText:
+          "I consent to receiving WhatsApp messages from BREW Coffee regarding this catering enquiry, quotation, and status updates.",
+        consentVersion: "v1.0",
+        enquiryId: requestId,
+        timestamp: nowIso,
+      });
+      waConsentRecord.id = `consent_${requestId}_whatsapp`;
+    }
+
     const adminDb = getAdminFirestore();
 
     if (adminDb && !simulateDbFailure) {
       try {
         const docRef = adminDb.collection("van_requests").doc(requestId);
+        const sessionRef = (voiceConsent && authoritativePhone)
+          ? adminDb.collection(VOICE_BOOKING_COLLECTION).doc(sessionId)
+          : null;
+        const outboxRefs = outboxDeliveries.map((d) =>
+          adminDb.collection(OUTBOX_COLLECTION).doc(d.id)
+        );
+        const voiceConsentRef = voiceConsentRecord
+          ? adminDb.collection(CUSTOMER_CONSENT_COLLECTION).doc(voiceConsentRecord.id)
+          : null;
+        const waConsentRef = waConsentRecord
+          ? adminDb.collection(CUSTOMER_CONSENT_COLLECTION).doc(waConsentRecord.id)
+          : null;
 
-        // Atomic Transaction: Detect existing enquiry or safely persist fresh record
+        // Atomic Transaction: Detect existing enquiry or safely persist fresh records across collections
         const txPromise = adminDb.runTransaction(async (transaction) => {
+          // 1. All transaction reads must strictly precede any writes
           const snap = await transaction.get(docRef);
           if (snap.exists) {
             return { exists: true, data: snap.data() };
           }
+
+          if (sessionRef) {
+            await transaction.get(sessionRef);
+          }
+          for (const oRef of outboxRefs) {
+            await transaction.get(oRef);
+          }
+          if (voiceConsentRef) {
+            await transaction.get(voiceConsentRef);
+          }
+          if (waConsentRef) {
+            await transaction.get(waConsentRef);
+          }
+
+          // 2. Strict transaction write phase
           transaction.set(docRef, requestRecord);
+
+          if (sessionRef && serializedSession) {
+            transaction.set(sessionRef, serializedSession);
+          }
+          for (let i = 0; i < outboxDeliveries.length; i++) {
+            transaction.set(outboxRefs[i], outboxDeliveries[i]);
+          }
+          if (voiceConsentRef && voiceConsentRecord) {
+            transaction.set(voiceConsentRef, voiceConsentRecord);
+          }
+          if (waConsentRef && waConsentRecord) {
+            transaction.set(waConsentRef, waConsentRecord);
+          }
+
           return { exists: false, data: requestRecord };
         });
 
@@ -497,10 +732,18 @@ Respond directly to the customer at ${contact}.
             mailtoUrl,
             quotation: existingQuote,
             requestSummary: {
-              contact: cloudData.contact || contact,
+              contact:
+                typeof cloudData.contact === "string" && !cloudData.contact.includes("@")
+                  ? maskContact(cloudData.contact)
+                  : (cloudData.contact || persistedContact),
               organization: cloudData.organization || organization,
               location: cloudData.location || location,
               timestamp: cloudData.timestamp || timestamp,
+            },
+            voiceSessionId: cloudData.voiceSessionId || null,
+            consents: {
+              voice: Boolean(cloudData.voiceConsent),
+              whatsapp: Boolean(cloudData.whatsappConsent),
             },
             idempotentReplay: true,
           };
@@ -540,6 +783,14 @@ Respond directly to the customer at ${contact}.
 
     // Non-production safety net: Persist locally for dev/test runner if filesystem is writable
     if (!firestorePersisted) {
+      if (initialVoiceSession) {
+        try {
+          const sessionRepo = getVoiceSessionRepository();
+          await sessionRepo.save(initialVoiceSession);
+        } catch {
+          // In read-only test environments, silently continue
+        }
+      }
       try {
         const filePath = path.join(process.cwd(), "src/data/van_requests.json");
         const dirPath = path.dirname(filePath);
@@ -570,10 +821,15 @@ Respond directly to the customer at ${contact}.
       mailtoUrl,
       quotation,
       requestSummary: {
-        contact,
+        contact: isContactEmail ? persistedContact : maskContact(persistedContact),
         organization,
         location,
         timestamp,
+      },
+      voiceSessionId: voiceConsent && authoritativePhone ? sessionId : null,
+      consents: {
+        voice: Boolean(voiceConsent),
+        whatsapp: Boolean(whatsappConsent),
       },
     };
 
@@ -630,6 +886,7 @@ export async function GET(req: NextRequest) {
 
     // 2. Query Authoritative Firestore Collection via Firebase Admin SDK
     const adminDb = getAdminFirestore();
+    console.log("[DEBUG API] adminDb available:", Boolean(adminDb));
     let results: unknown[] = [];
 
     if (adminDb) {

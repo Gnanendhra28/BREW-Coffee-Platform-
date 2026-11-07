@@ -16,6 +16,7 @@ const HINDI_ROMANIZED_TOKENS = new Set([
   "hum", "theek", "accha", "shadi", "shaadi", "janmadin", "peene", "chai", "coffee",
   "batao", "bataiye", "sahi", "kardo", "hoga", "hogi", "kaunsa", "package", "mehmaan",
   "aayenge", "subah", "shaam", "dopahar", "kitne", "rupaye", "paisa", "paise", "madad",
+  "liye", "mein", "ko", "ke",
 ]);
 
 const TELUGU_ROMANIZED_TOKENS = new Set([
@@ -24,6 +25,7 @@ const TELUGU_ROMANIZED_TOKENS = new Set([
   "matladali", "matladandi", "maaku", "naku", "manchi", "pelliki", "pelli",
   "puttinaroju", "cheppandi", "telupandi", "sare", "theeyandi", "kaavalenu", "unte",
   "vastharu", "udayam", "saayanthram", "madhyahnam", "roju", "taruvatha", "sahayam",
+  "kosam", "lo", "ki",
 ]);
 
 /**
@@ -141,7 +143,7 @@ export function detectLanguage(
   if (hindiScore > teluguScore && (hindiScore >= 2 || hindiRatio >= 0.25)) {
     return {
       language: "hi",
-      confidence: Math.min(0.95, 0.6 + hindiRatio * 0.4),
+      confidence: Math.max(0.85, Math.min(0.95, 0.7 + hindiRatio * 0.5)),
       detectedScript: "latin",
     };
   }
@@ -149,7 +151,7 @@ export function detectLanguage(
   if (teluguScore > hindiScore && (teluguScore >= 2 || teluguRatio >= 0.25)) {
     return {
       language: "te",
-      confidence: Math.min(0.95, 0.6 + teluguRatio * 0.4),
+      confidence: Math.max(0.85, Math.min(0.95, 0.7 + teluguRatio * 0.5)),
       detectedScript: "latin",
     };
   }

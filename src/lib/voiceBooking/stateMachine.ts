@@ -66,6 +66,7 @@ export const VALID_TRANSITIONS: Record<VoiceBookingState, VoiceBookingState[]> =
   ],
   awaiting_staff_approval: [
     "booking_confirmed",
+    "customer_declined",
     "human_handoff",
     "cancelled",
     "failed",

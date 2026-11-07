@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useVan } from "../../context/VanContext";
+import { VoiceBookingsManager } from "../../components/VoiceBookingsManager";
 
 export default function FleetAdminPage() {
   const router = useRouter();
@@ -36,7 +37,7 @@ export default function FleetAdminPage() {
     updateFlashDeal,
   } = useVan();
 
-  const [activeTab, setActiveTab] = useState<"overview" | "fleet_stops" | "flash_deals" | "security">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "fleet_stops" | "flash_deals" | "voice_bookings" | "security">("overview");
 
   // Add stop state
   const [newDate, setNewDate] = useState("");
@@ -167,6 +168,16 @@ export default function FleetAdminPage() {
           }`}
         >
           Flash Deal Override
+        </button>
+        <button
+          onClick={() => setActiveTab("voice_bookings")}
+          className={`px-4 py-2 rounded-xl transition-all ${
+            activeTab === "voice_bookings"
+              ? "bg-[#c49a45] text-black font-bold shadow"
+              : "text-white/60 hover:text-white hover:bg-white/5"
+          }`}
+        >
+          AI Voice Bookings
         </button>
         <button
           onClick={() => setActiveTab("security")}
@@ -451,6 +462,16 @@ export default function FleetAdminPage() {
                 />
               </div>
             </div>
+          </div>
+        )}
+
+        {/* VOICE BOOKINGS TAB */}
+        {activeTab === "voice_bookings" && (
+          <div className="space-y-6">
+            <VoiceBookingsManager
+              title="Fleet Admin · Voice Booking Management"
+              subtitle="Full administrative control over AI voice booking requests, quotation signatures, and catering approvals."
+            />
           </div>
         )}
 

@@ -263,11 +263,12 @@ export async function orchestrateCommunicationPolicy(
   let activeDndScopes: DndRecord[] = [];
   try {
     activeDndScopes = await dependencies.dndRepository.findActiveScopes(normalizedPhone);
-  } catch (err) {
+  } catch {
     return {
-      status: "blocked",
-      reason: "REPOSITORY_INTEGRITY_MISMATCH",
-      details: `Failed to retrieve DND records from repository: ${err instanceof Error ? err.message : String(err)}`,
+      status: "error",
+      reason: "INFRASTRUCTURE_FAILURE",
+      details: "Failed to retrieve DND records from repository due to internal infrastructure error.",
+      isRetryable: true,
       evaluatedAt,
       channel: request.channel,
       purpose: request.purpose,
@@ -279,9 +280,10 @@ export async function orchestrateCommunicationPolicy(
   const dndPhoneMismatch = activeDndScopes.some((r) => r.phoneNumber !== normalizedPhone);
   if (dndPhoneMismatch) {
     return {
-      status: "blocked",
-      reason: "REPOSITORY_INTEGRITY_MISMATCH",
-      details: "Security violation: DND repository returned records belonging to a different phone number.",
+      status: "error",
+      reason: "INFRASTRUCTURE_FAILURE",
+      details: "Repository returned DND records with mismatched phone identity.",
+      isRetryable: true,
       evaluatedAt,
       channel: request.channel,
       purpose: request.purpose,
@@ -293,11 +295,12 @@ export async function orchestrateCommunicationPolicy(
   let consentEvents: ConsentRecord[] = [];
   try {
     consentEvents = await dependencies.consentRepository.findByPhone(normalizedPhone);
-  } catch (err) {
+  } catch {
     return {
-      status: "blocked",
-      reason: "REPOSITORY_INTEGRITY_MISMATCH",
-      details: `Failed to retrieve consent records from repository: ${err instanceof Error ? err.message : String(err)}`,
+      status: "error",
+      reason: "INFRASTRUCTURE_FAILURE",
+      details: "Failed to retrieve consent records from repository due to internal infrastructure error.",
+      isRetryable: true,
       evaluatedAt,
       channel: request.channel,
       purpose: request.purpose,
@@ -309,9 +312,25 @@ export async function orchestrateCommunicationPolicy(
   const consentPhoneMismatch = consentEvents.some((r) => r.phoneNumber !== normalizedPhone);
   if (consentPhoneMismatch) {
     return {
-      status: "blocked",
-      reason: "REPOSITORY_INTEGRITY_MISMATCH",
-      details: "Security violation: Consent repository returned records belonging to a different phone number.",
+      status: "error",
+      reason: "INFRASTRUCTURE_FAILURE",
+      details: "Repository returned consent records with mismatched phone identity.",
+      isRetryable: true,
+      evaluatedAt,
+      channel: request.channel,
+      purpose: request.purpose,
+      phoneNumberMasked: maskPhoneNumber(normalizedPhone),
+    };
+  }
+
+  // Integrity Check: Malformed authoritative records fail closed as infrastructure errors
+  const hasMalformedRecord = consentEvents.some((r) => !r.phoneNumber || !r.channel || !r.purpose);
+  if (hasMalformedRecord) {
+    return {
+      status: "error",
+      reason: "INFRASTRUCTURE_FAILURE",
+      details: "Authoritative repository record is malformed.",
+      isRetryable: true,
       evaluatedAt,
       channel: request.channel,
       purpose: request.purpose,

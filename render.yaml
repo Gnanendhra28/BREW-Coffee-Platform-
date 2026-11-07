@@ -21,6 +21,14 @@ services:
         sync: false
       - key: AUTH_SECRET
         generateValue: true
+      - key: QUOTATION_SNAPSHOT_SECRET
+        generateValue: true
+      - key: VOICE_BOOKING_ENABLED
+        value: "false"
+      - key: BUSINESS_EMAIL
+        value: "catering@brewcoffee.in"
+      - key: NEXT_PUBLIC_BUSINESS_EMAIL
+        value: "catering@brewcoffee.in"
       - key: BARISTA_PIN
         sync: false
       - key: FLEET_ADMIN_PIN

@@ -171,8 +171,34 @@ export const QuotationMaterialSnapshotSchema = z.object({
   venueAddress: z.string().trim().min(3, "Venue address must be at least 3 characters"),
   selectedTier: z.enum(["BASIC", "STANDARD", "PREMIUM"]).nullable(),
   eventType: z.string().trim().nullable(),
-  hash: z.string().min(1),
+  hash: z.string().regex(/^[0-9a-f]{64}$/i, "Hash must be a 64-character SHA-256 hex string"),
   generatedAt: StrictIsoUtcSchema,
+});
+
+export const StaffApprovalAuditRecordSchema = z.object({
+  staffIdentity: z.string().min(1, "Staff identity cannot be empty"),
+  staffRole: z.enum(["barista", "fleet_admin", "admin"]),
+  staffApprovalId: z.string().min(1, "Staff approval ID cannot be empty"),
+  approvedAt: StrictIsoUtcSchema,
+  sessionId: z.string().min(1, "Session ID cannot be empty"),
+});
+
+export const StaffRejectionAuthorizationContextSchema = z.object({
+  staffIdentity: z.string().min(1, "Staff identity cannot be empty"),
+  staffRole: z.enum(["barista", "fleet_admin", "admin"]),
+  staffRejectionId: z.string().min(1, "Staff rejection ID cannot be empty"),
+  reason: z.string().min(3, "Rejection reason must be at least 3 characters"),
+  customerFacingReason: z.string().optional(),
+});
+
+export const StaffRejectionAuditRecordSchema = z.object({
+  staffIdentity: z.string().min(1, "Staff identity cannot be empty"),
+  staffRole: z.enum(["barista", "fleet_admin", "admin"]),
+  staffRejectionId: z.string().min(1, "Staff rejection ID cannot be empty"),
+  rejectedAt: StrictIsoUtcSchema,
+  sessionId: z.string().min(1, "Session ID cannot be empty"),
+  reason: z.string().min(3, "Rejection reason must be at least 3 characters"),
+  customerFacingReason: z.string().optional(),
 });
 
 export const VoiceBookingSessionSchema = z.object({
@@ -182,10 +208,16 @@ export const VoiceBookingSessionSchema = z.object({
   state: VoiceBookingStateSchema,
   requirements: BookingRequirementsSchema,
   quotation: z.any().nullable(),
-  quotationSnapshot: QuotationMaterialSnapshotSchema.nullable().optional().default(null),
+  quotationSnapshot: QuotationMaterialSnapshotSchema.nullable().default(null),
   conversationHistory: z.array(ConversationMessageSchema),
   createdAt: StrictIsoUtcSchema,
   updatedAt: StrictIsoUtcSchema,
+  revision: z.number().int().min(1).default(1),
   staffApprovalId: z.string().nullable(),
+  staffApprovalAudit: StaffApprovalAuditRecordSchema.nullable().optional().default(null),
+  staffRejectionAudit: StaffRejectionAuditRecordSchema.nullable().optional().default(null),
+  officialBookingId: z.string().nullable().optional().default(null),
   metadata: z.record(z.string(), z.unknown()),
+  lastProcessedTurnIndex: z.number().int().min(0).nullable().optional().default(null),
+  processedTurnIds: z.array(z.string()).optional().default([]),
 });
