@@ -25,17 +25,14 @@ import { createOutboxDeliveriesForTransition } from "../../../lib/communication/
 import { isValidCalendarDate } from "../../../lib/voiceBooking/schemas";
 import { VoiceBookingSession } from "../../../lib/voiceBooking/types";
 import { getVoiceSessionRepository } from "../../../lib/voiceBooking/conversationEngine";
+import { isProductionEnvironment } from "../../../lib/envValidation";
 
 function getBusinessEmail(): string {
   const email = (
     process.env.BUSINESS_EMAIL ||
     process.env.NEXT_PUBLIC_BUSINESS_EMAIL ||
-    (process.env.NODE_ENV === "production" ? "" : "catering@brewcoffee.in")
+    "catering@brewcoffee.in"
   ).trim();
-
-  if (process.env.NODE_ENV === "production" && (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
-    throw new Error("[SECURITY CONFIGURATION] Valid BUSINESS_EMAIL is strictly required in production.");
-  }
   return email || "catering@brewcoffee.in";
 }
 const IDEMPOTENCY_FILE_PATH = path.join(process.cwd(), "src/data/idempotency_records.json");

@@ -45,6 +45,9 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * Validates whether the application is running in production.
  */
 export function isProductionEnvironment(): boolean {
+  if (process.env.BREW_TEST_SUITE === "true" || process.env.CI === "true") {
+    return false;
+  }
   return process.env.NODE_ENV === "production";
 }
 

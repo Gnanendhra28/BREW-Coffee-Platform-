@@ -621,7 +621,7 @@ async function runAcceptanceGate() {
       delete process.env.FIREBASE_CLIENT_EMAIL;
       delete process.env.FIREBASE_PRIVATE_KEY;
 
-      const healthRes = await healthCheckGet();
+      const healthRes = await healthCheckGet(new NextRequest("http://localhost/api/health?strict=true"));
       assert.strictEqual(healthRes.status, 503, "/api/health must return 503 degraded in production");
       const healthJson = await healthRes.json();
       assert.strictEqual(healthJson.status, "degraded", "Health status must report degraded");

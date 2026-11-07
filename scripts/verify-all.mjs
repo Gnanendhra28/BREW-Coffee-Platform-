@@ -80,6 +80,10 @@ async function runAll() {
             BARISTA_PIN: process.env.BARISTA_PIN || "2026",
             FLEET_ADMIN_PIN: process.env.FLEET_ADMIN_PIN || "7788",
             AUTH_SECRET: process.env.AUTH_SECRET || "brew-platform-secure-jwt-hmac-secret-key-2026",
+            BUSINESS_EMAIL: process.env.BUSINESS_EMAIL || "catering@brewcoffee.in",
+            NEXT_PUBLIC_BUSINESS_EMAIL: process.env.NEXT_PUBLIC_BUSINESS_EMAIL || "catering@brewcoffee.in",
+            QUOTATION_SNAPSHOT_SECRET: process.env.QUOTATION_SNAPSHOT_SECRET || "brew-platform-secure-jwt-hmac-secret-key-2026",
+            OUTBOX_WORKER_SECRET: process.env.OUTBOX_WORKER_SECRET || "brew-platform-secure-jwt-hmac-secret-key-2026",
           },
         })
       : spawn("npm", ["run", "start"], {
@@ -93,6 +97,10 @@ async function runAll() {
             BARISTA_PIN: process.env.BARISTA_PIN || "2026",
             FLEET_ADMIN_PIN: process.env.FLEET_ADMIN_PIN || "7788",
             AUTH_SECRET: process.env.AUTH_SECRET || "brew-platform-secure-jwt-hmac-secret-key-2026",
+            BUSINESS_EMAIL: process.env.BUSINESS_EMAIL || "catering@brewcoffee.in",
+            NEXT_PUBLIC_BUSINESS_EMAIL: process.env.NEXT_PUBLIC_BUSINESS_EMAIL || "catering@brewcoffee.in",
+            QUOTATION_SNAPSHOT_SECRET: process.env.QUOTATION_SNAPSHOT_SECRET || "brew-platform-secure-jwt-hmac-secret-key-2026",
+            OUTBOX_WORKER_SECRET: process.env.OUTBOX_WORKER_SECRET || "brew-platform-secure-jwt-hmac-secret-key-2026",
           },
         });
 

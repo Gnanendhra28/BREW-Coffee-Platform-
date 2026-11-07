@@ -1,7 +1,7 @@
 // Healthcheck & Fleet Monitoring Endpoint
 // Monitored by BetterStack, UptimeRobot, or Datadog for automated van uptime alerts.
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getAgentCacheStats } from "../../../lib/agentCache";
 import { getAdminFirestore } from "../../../lib/firebaseAdmin";
 import { getRealtimeServerSnapshot } from "../../../lib/serverRealtimeStore";
@@ -9,12 +9,28 @@ import { validateProductionEnvironment, isProductionEnvironment } from "../../..
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(): Promise<NextResponse>;
+export async function GET(req: NextRequest): Promise<NextResponse>;
+export async function GET(req?: NextRequest): Promise<NextResponse> {
   const startTime = Date.now();
 
   try {
     const isProd = isProductionEnvironment();
     const envValidation = validateProductionEnvironment();
+
+    // Check if strict readiness verification is explicitly requested
+    let isStrict = false;
+    if (req) {
+      try {
+        const url = new URL(req.url, "http://localhost");
+        isStrict = url.searchParams.get("strict") === "true";
+      } catch {
+        isStrict = req.url ? req.url.includes("strict=true") : false;
+      }
+    }
+    if (process.env.HEALTHCHECK_STRICT === "true") {
+      isStrict = true;
+    }
 
     // 1. Process & Memory Metrics
     const memory = process.memoryUsage();
@@ -160,14 +176,22 @@ export async function GET() {
     };
 
     const isProduction = isProductionEnvironment();
-    const hasOutage =
-      checks.firestore.status === "unhealthy" ||
-      checks.redis.status === "unhealthy" ||
+    const hasActiveOutage =
+      checks.firestore.status === "unhealthy" || checks.redis.status === "unhealthy";
+
+    const isDegraded =
+      hasActiveOutage ||
       (isProduction && checks.firestore.status !== "healthy") ||
       (isProduction && !envValidation.valid);
 
-    const isHealthy = !hasOutage;
+    const isHealthy = !isDegraded;
     const latencyMs = Date.now() - startTime;
+
+    // Liveness vs Readiness status code:
+    // Deployment platforms (Render, Kubernetes, Docker) poll /api/health as a liveness probe
+    // and require HTTP 200-399. HTTP 503 is returned if there is an active outage of a configured
+    // backing service, or when strict mode (?strict=true or HEALTHCHECK_STRICT=true) is requested.
+    const statusCode = hasActiveOutage || (isStrict && isDegraded) ? 503 : 200;
 
     return NextResponse.json(
       {
@@ -180,7 +204,7 @@ export async function GET() {
         checks,
       },
       {
-        status: isHealthy ? 200 : 503,
+        status: statusCode,
         headers: {
           "Cache-Control": "no-store, no-cache, must-revalidate",
           "X-Healthcheck-Latency": `${latencyMs}ms`,

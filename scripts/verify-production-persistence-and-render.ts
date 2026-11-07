@@ -439,7 +439,7 @@ async function runVerification() {
       delete process.env.FIREBASE_CLIENT_EMAIL;
       delete process.env.FIREBASE_PRIVATE_KEY;
 
-      const prodRes = await healthCheckGet();
+      const prodRes = await healthCheckGet(new NextRequest("http://localhost/api/health?strict=true"));
       assert.strictEqual(prodRes.status, 503, "Production healthcheck without Firestore must return 503");
       const prodJson = await prodRes.json();
       assert.strictEqual(prodJson.status, "degraded", "Status must be degraded");

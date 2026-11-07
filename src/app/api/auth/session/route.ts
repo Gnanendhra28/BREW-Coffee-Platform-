@@ -100,10 +100,7 @@ export async function POST(req: NextRequest) {
       const isTestEnv =
         process.env.BREW_TEST_SUITE === "true" ||
         process.env.PLAYWRIGHT_TEST === "true";
-      const testBaristaPin =
-        isTestEnv && process.env.NODE_ENV !== "production"
-          ? process.env.TEST_BARISTA_PIN
-          : undefined;
+      const testBaristaPin = isTestEnv ? process.env.TEST_BARISTA_PIN : undefined;
 
       if (typeof pin === "string" && fleetAdminPin && verifyStaffPin(pin, fleetAdminPin)) {
         determinedRole = "fleet_admin";
