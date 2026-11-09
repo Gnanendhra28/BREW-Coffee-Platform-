@@ -58,7 +58,57 @@ async function runAll() {
   console.log("🚀 BREW PLATFORM — MASTER PRODUCTION TEST & CI VERIFICATION");
   console.log("===============================================================\n");
 
+  if (!process.env.TEST_BARISTA_PIN) {
+    process.env.TEST_BARISTA_PIN = "brew_qa_test_barista_pin_9876";
+  }
+  process.env.BREW_TEST_SUITE = "true";
+
   let serverProcess = null;
+  let fastapiProcess = null;
+
+  // 1. Ensure FastAPI backend is running on port 8000 if backend/ exists and FASTAPI backend is requested
+  const hasBackend = (await import("node:fs")).existsSync("backend");
+  const requiresFastApi = Boolean(process.env.FASTAPI_BACKEND_URL || process.env.START_FASTAPI === "true");
+  if (hasBackend && requiresFastApi) {
+    const isFastApiRunning = await checkServerReady(8000, 1000);
+    if (!isFastApiRunning) {
+      console.log("⚡ Starting background FastAPI backend on port 8000...");
+      try {
+        fastapiProcess = spawn(
+          "uv",
+          ["run", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000"],
+          {
+            cwd: "backend",
+            stdio: "pipe",
+            env: {
+              ...process.env,
+              NODE_ENV: "development",
+              BREW_TEST_SUITE: "true",
+              TEST_BARISTA_PIN: process.env.TEST_BARISTA_PIN,
+              BARISTA_PIN: process.env.BARISTA_PIN || "2026",
+              FLEET_ADMIN_PIN: process.env.FLEET_ADMIN_PIN || "7788",
+              AUTH_SECRET: process.env.AUTH_SECRET || "brew-platform-secure-jwt-hmac-secret-key-2026",
+              CRON_SECRET: process.env.CRON_SECRET || "brew-cron-worker-secret-dev",
+            },
+          }
+        );
+        fastapiProcess.on("error", (err) => {
+          console.warn(`[FastAPI background process skipped: ${err.message}]`);
+          fastapiProcess = null;
+        });
+        const fastapiReady = await checkServerReady(8000, 15000);
+        if (fastapiReady) {
+          console.log("✔ FastAPI backend ready on http://127.0.0.1:8000\n");
+        }
+      } catch (err) {
+        console.warn(`[Failed to spawn FastAPI background process: ${err.message}]`);
+        fastapiProcess = null;
+      }
+    } else {
+      console.log("✔ Existing FastAPI backend detected on http://127.0.0.1:8000\n");
+    }
+  }
+
   const isRunning = await checkServerReady(3000, 1000);
 
   if (!process.env.TEST_BARISTA_PIN) {
@@ -67,6 +117,7 @@ async function runAll() {
 
   if (!isRunning) {
     console.log("⚡ Starting BREW local server instance on port 3000 for verification...");
+    let serverOutput = "";
     const hasStandalone = (await import("node:fs")).existsSync(".next/standalone/server.js");
     serverProcess = hasStandalone
       ? spawn("node", [".next/standalone/server.js"], {
@@ -104,9 +155,23 @@ async function runAll() {
           },
         });
 
+    if (serverProcess.stdout) {
+      serverProcess.stdout.on("data", (chunk) => {
+        serverOutput += chunk.toString();
+      });
+    }
+    if (serverProcess.stderr) {
+      serverProcess.stderr.on("data", (chunk) => {
+        serverOutput += chunk.toString();
+      });
+    }
+
     const ready = await checkServerReady(3000, 30000);
     if (!ready) {
       console.error("✖ Failed to start BREW application server on port 3000 within timeout.");
+      if (serverOutput.trim()) {
+        console.error("Server output:\n", serverOutput);
+      }
       if (serverProcess) serverProcess.kill("SIGTERM");
       process.exit(1);
     }
@@ -139,6 +204,10 @@ async function runAll() {
     if (serverProcess) {
       console.log("Stopping background BREW server instance...");
       serverProcess.kill("SIGTERM");
+    }
+    if (fastapiProcess) {
+      console.log("Stopping background FastAPI backend instance...");
+      fastapiProcess.kill("SIGTERM");
     }
   }
 }

@@ -3,6 +3,7 @@ import { verifySessionToken } from "./lib/authTokens";
 
 export const config = {
   matcher: [
+    "/api/:path*",
     "/barista",
     "/barista/:path*",
     "/admin",
@@ -12,6 +13,17 @@ export const config = {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // 0. Runtime reverse-proxy for FastAPI backend when FASTAPI_BACKEND_URL is configured
+  if (pathname.startsWith("/api/")) {
+    const rawBackendUrl = process.env.FASTAPI_BACKEND_URL;
+    if (rawBackendUrl) {
+      const backendUrl = rawBackendUrl.replace(/\/+$/, "");
+      return NextResponse.rewrite(new URL(`${backendUrl}${pathname}${req.nextUrl.search}`));
+    }
+    return NextResponse.next();
+  }
+
   const token = req.cookies.get("brew_session")?.value;
 
   // 1. Verify existence of session token
